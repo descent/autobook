@@ -1,0 +1,333 @@
+\chapter{Writing `configure.in'}
+
+
+Writing a portable `configure.in' is a tricky business. Since you can put 
+arbitrary (隨心所欲的, 武斷的) shell code into `configure.in', your options 
+seem overwhelming (壓倒的; 勢不可擋的). There are many questions the first-time Autoconf user asks: What constructs are portable and what constructs aren't portable? How do I decide what to check for? What shouldn't I check for? How do I best use Autoconf's features? What shouldn't I put in `configure.in'? In what order should I run my checks? When should I look at the name of the system instead of checking for specific features? 
+
+\section{What is Portability?}
+
+
+Before we talk about the mechanics (技術性的部分; 技術; 技巧, 力學; 機械學) of
+deciding what to check for and how to check for it, let's ask ourselves a simple question: what is portability? Portability is a quality of the code that enables it to be built and run on a variety of (a variety of 種種) platforms. In the Autoconf context, portability usually refers to the ability to run on Unix-like systems--sometimes including Windows. 
+
+
+When I first started using Autoconf, I had a hard time deciding what to check for in my `configure.in'. At the time, I was maintaining a
+proprietary (私有的, 私營的; 財產的; 財產權的; 財產的; 財產權的)
+program that ran only on SunOS 4. However, I was interested in porting it to 
+Solaris, OSF/1, and possibly Irix. 
+
+
+The approach I took, while workable, was relatively (相對地, 比較而言; 相當)
+time-consuming (費時的; 曠日持久的) and painful: I wrote a minimal `configure.in' and then proceeded to simply try to build my program on Solaris. Each time I encountered a build problem, I updated `configure.in' and my source and started again. Once it built correctly, I started testing to see if there were runtime problems related to portability. 
+
+
+Since I didn't start with a relatively portable base, and since I was
+unaware of (unaware of 沒察覺到, 沒注意) the tools available to help with adding Autoconf support to a package (see section 24. Migrating an Existing Package to GNU Autotools), it was much more difficult than it had to be. If at all possible, it is better to write portable code to begin with. 
+
+
+There are a large number of Unix-like systems in the world, including many 
+systems which, while still running, can only be considered obsolete. While it 
+is probably possible to port some programs to all such systems, typically it 
+isn't useful to even try. Porting to everything is a difficult process,
+especially given that it usually isn't possible to test on all platforms, and 
+that new operating systems, with their own bugs and 
+idiosyncracies ( (個人的) 氣質, 習性) are released every year. 
+
+
+We advocate (擁護; 提倡; 主張) a pragmatic (務實的; 實幹的) 
+approach (方法, 門徑; 態度) to portability: we write our programs to target a 
+fairly large, but also fairly modern, cross-section of Unix-like systems. As 
+deficiencies (缺陷, 缺點) are discovered in our portability framework, we 
+update `configure.in' and our sources, and move on. In practice, this is an 
+effective approach.
+
+
+
+\section{Brief introduction to portable sh}
+
+
+If you read a number of `configure.in's, you'll quickly notice that they tend 
+to be written in an unusual style. For instance, you'll notice you 
+\underline{hardly ever} (很少有)\marginpar{在 sh script 使用 test 比使用 [
+還頻繁。}
+see the `[' program used; instead you'll see `test' invoked. We won't go 
+into all the details of writing a portable shell script here; instead we leave 
+that for chapter \ref{C_Writing_Portable_Bourne_Shell} Writing Portable Bourne 
+Shell, page \pageref{C_Writing_Portable_Bourne_Shell}. 
+
+
+Like other aspects of portability, the approach you take to writing shell scripts in `configure.in' and `Makefile.am' should depend on your goals. Some platforms have notoriously (惡名昭彰地, 聲名狼藉地) broken sh implementations. For instance, Ultrix sh doesn't implement unset. Of course, the GNU Autotools are written in the most portable style possible, so as not to limit your possibilities. 
+
+
+Also, it doesn't really \underline{make sense} (有意義)  to talk about 
+portable sh programming in the abstract. sh by itself does very little; most 
+actual work is done by separate programs, each with its own potential 
+portability problems. For instance, some options are not portable between 
+systems, and some seemingly (表面上; 似乎是) common programs don't exist on 
+every system -- so not only do you have to know which sh constructs are not 
+portable, but you also must know which programs you can (and cannot) use, and 
+which options to those programs are portable. 
+
+
+This seems daunting (令人怯步的;使人氣餒的), but
+\underline{in practice} (在實踐上; 實際上) it doesn't seem 
+to be too hard to write portable shell scripts -- once you've 
+internalized (使 (習俗、 準則等經吸收同化而) 內在化) the rules. Unfortunately,
+this process can take a long time. Meanwhile (其時, 其間) , a 
+pragmatic (務實的;實幹的) `try and see' approach, while noting other portable 
+code you've seen elsewhere (在別處; 往別處; 到別處), works fairly well.
+Once again, it pays to \underline{be aware of} (意識到) which architectures 
+you'll probably care about -- you will make different choices if you are 
+writing an extremely (非常) portable program like emacs or gcc than if you 
+are writing something that will only run on various flavors of Linux. Also,
+the cost of having unportable code in `configure.in' is relatively low -- in 
+general it is fairly easy to rewrite pieces on demand as unportable constructs 
+are found. 
+
+\section{Ordering Tests}
+
+
+In addition to the problem of writing portable sh code, another problem which 
+confronts (迎面遇到; 面臨; 遭遇) first-time `configure.in' writers is determining the order in which to run the various tests. Autoconf indirectly (via the autoscan program, which we cover in 24. Migrating an Existing Package to GNU Autotools) suggests a standard ordering, which is what we describe here. 
+
+
+The standard ordering is:
+\begin{enumerate}
+\item Boilerplate (照本宣科的規範; (新聞業) 一成不變的陳腐文字) . This section 
+should include standard boilerplate code,
+such as the call to AC\_{}INIT (which must be first),
+AM\_{}INIT\_{}AUTOMAKE, AC\_{}CONFIG\_{}HEADER, and perhaps AC\_{}REVISION. 
+
+\item Options. The next section should include macros which add 
+command-line options to configure, such as AC\_{}ARG\_{}ENABLE.
+It is typical to put support code for the option in this section as well,
+if it is short enough, like this example from libgcj: 
+
+\begin{Verbatim}[frame=single]
+AC_ARG_ENABLE(getenv-properties,
+[  --disable-getenv-properties
+     don't set system properties from GCJ_PROPERTIES])
+
+dnl Whether GCJ_PROPERTIES is used depends on the target.
+if test -n "$enable_getenv_properties"; then
+ enable_getenv_properties=${
+  enable_getenv_properties_default-yes}
+fi
+if test "$enable_getenv_properties" = no; then
+ AC_DEFINE(DISABLE_GETENV_PROPERTIES)
+fi
+\end{Verbatim}
+
+\item Programs. Next it is traditional to check for programs that are either needed by the configure process, the build process, or by one of the programs being built. This usually involves calls to macros like 
+AC\_{}CHECK\_{}PROG and AC\_{}PATH\_{}TOOL. 
+
+\item Libraries. Checks for libraries come before checks for other objects visible to C (or C++, or anything else). This is necessary because some other checks work by trying to link or run a program; by checking for libraries first you ensure that the resulting programs can be linked. 
+
+\item Headers. Next come checks for existence of headers. 
+
+\item Typedefs and structures. We do checks for typedefs after checking for headers for the simple reason that typedefs appear in headers, and we need to know which headers we can use before we look inside them. 
+
+\item Functions. Finally we check for functions. These come last because 
+functions have dependencies on the preceding (在前的, 在先的; 前面的) items:
+when searching for functions, libraries are needed in order to correctly 
+link, headers are needed in order to find prototypes (this is especially 
+important for C++, which has stricter prototyping rules than C), and typedefs 
+are needed for those functions which use or return types which are not built in. 
+
+\item Output. This is done by invoking AC\_{}OUTPUT. 
+\end{enumerate}
+
+This ordering should be considered a rough guideline, and not a list of 
+hard-and-fast (不容變更的; 嚴格的) rules. Sometimes it is necessary to 
+interleave (插入, 插敘) tests, either to make `configure.in' easier to 
+maintain, or because the tests themselves do need to be in a different order. For instance, if your project uses both C and C++ you might choose to do all the C++ checks after all the C checks are done, in order to make `configure.in' 
+\underline{a bit} (有點) easier to read. 
+
+\section{What to check for}
+
+
+Deciding what to check for is really the central part of 
+writing `configure.in'. Once you've read the Autoconf reference manual,
+the ``how''s of writing a particular test should be fairly clear.
+The ``when''s might remain a mystery -- and it's just as easy to check for 
+too many things as it is to check for too few. 
+
+
+One notable area of divergence (背離; 分離; 相異) between various Unix-like 
+systems is that the same programs don't exist on all systems, and, even when 
+they do, they don't always work in the same way. For these problems we 
+recommend, when possible, following the advice of the GNU Coding Standards: 
+use the most common options from a relatively limited set of programs. 
+Failing (如果沒有...; 若無...時) that, try to stick to (忠於; 信守)
+programs and options specified by POSIX, perhaps augmenting this approach 
+by doing checks for known problems on platforms you care about. 
+
+
+Checking for tools and their differences is usually a fairly small part of a `configure' script; more common are checks for functions, libraries, and the like. 
+
+
+\underline{Except for} (除了...以外, 要不是由於) a few core libraries 
+like `libc' and, usually, `libm' and libraries like `libX11' which typically 
+aren't considered system libraries, there isn't much 
+agreement (同意, 一致, 協定, 協議) about library 
+names or contents between Unix systems. Still, libraries are easy to handle,
+because decisions about libraries almost always only affect the 
+various `Makefile's. That means that checking for another library typically 
+doesn't require major (or even, sometimes, any) changes to the source code.
+Also, because adding a new library test has a small impact (影響; 作用) on the 
+development cycle -- effectively just re-running `configure' and then a 
+relink -- you can effectively (有效地; 生效地) adopt (採取; 採納; 吸收) a 
+lax (不嚴格的;馬馬虎虎的) approach to libraries. For instance, you can just 
+make things work on the few systems you immediately care about and then 
+handle library changes on an as-needed basis. 
+
+
+Suppose (猜想, 以為) you do \underline{end up} (結束, 死亡) with a link 
+problem. How do you handle it? The 
+first thing to do is use nm to look through the system libraries to see 
+if the missing function exists. If it does, and it is in a library you 
+can use then the solution is easy -- just add another AC\_{}CHECK\_{}LIB.
+Note that just finding the function in a library is not enough, because on 
+some systems, some ``standard'' libraries are 
+undesirable (令人不快的, 不受歡迎的; 討厭的); `libucb' is the 
+most common example of a library which you should avoid. 
+
+If you can't find the function in a system library then you have a 
+somewhat (有點, 稍微) more difficult problem: a non-portable function.
+There are basically three approaches to a missing function. Below we talk about 
+functions, but really these same approaches apply,
+\underline{more or less} (多少有些;大約), to typedefs, structures,
+and global variables.  
+
+The first approach is to write a replacement function and either 
+conditionally (附有條件地) compile it, or put it into an 
+appropriately-named (appropriately 適當地, 合適地, 相稱地) file and use 
+AC\_{}REPLACE\_{}FUNCS. For instance, Tcl uses AC\_{}REPLACE\_{}FUNCS (strstr) 
+to handle systems that have no strstr function. 
+
+
+The second approach is used when there is a similar function with a different 
+name. The idea here is to check for all the alternatives and then modify 
+your source to use whichever (無論哪個; 無論哪些) one might exist.
+The idiom (慣用語; 成語; 習慣語) here is to use break in the second 
+argument to AC\_{}CHECK\_{}FUNCS; this is used both to skip unnecessary tests 
+and to indicate to the reader that these checks are related. For instance,
+here is how libgcj checks for inet\_{}aton or inet\_{}addr; it only uses 
+the first one found:
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_FUNCS(inet_aton inet_addr, break)
+\end{Verbatim}
+
+Code to use the results of these checks looks something like: 
+
+
+\begin{Verbatim}[frame=single]
+#if HAVE_INET_ATON
+  ... use inet_aton here
+#else
+#if HAVE_INET_ADDR
+  ... use inet_addr here
+#else
+#error Function missing!
+#endif
+#endif
+\end{Verbatim}
+
+Note how we've made it a compile-time error if the function does not exist.
+In general it is best to make errors occur as early as possible in the 
+build process. 
+
+
+The third approach to non-portable functions is to write code such that 
+these functions are only optionally used. For instance, if you are writing 
+an editor you might decide to use mmap to map a file into the editor's memory.
+However, since mmap is not portable\marginpar{這一句子指出 mmap 不具可攜性},
+you would also write a function to use the more portable read. 
+
+
+Handling known non-portable functions is only part of the problem, however.
+The pragmatic (務實的; 實幹的) approach works fairly well, but it is somewhat 
+inefficient (無效率的; 效能差的; 無能的, 不稱職的) if you 
+are primarily (首先; 起初, 原來) developing on a more modern system, like GNU/Linux, which has few functions missing. In this case the problem is that you might not notice non-portable constructs in your code until it has largely been finished. 
+
+
+Unfortunately, there's no high road to solving this problem. In the end, you 
+need to have a working knowledge of the range of existing Unix systems.
+Knowledge of standards such as POSIX and XPG can be useful here, as a 
+first cut -- if it isn't in POSIX, you should at least consider checking for it.
+However, standards are not a panacea (萬能藥;補救之道) -- not all systems 
+are POSIX compliant,
+and sometimes there are bugs in systems functions which you must work around. 
+
+
+One final class of problems you might encounter is that it is also easy to 
+check for too much. This is bad because it adds unnecessary maintenance 
+burden (重負, 重擔; 負擔, 沈重的責任) to your program. For instance, sometimes 
+you'll see code that checks for $<$sys/types.h$>$. However, there's no point 
+in doing that -- using this header is mostly portable. Again, this can only be 
+addressed by having a practical knowledge, which is only really possible by 
+examining your target systems. 
+
+\section{Using Configuration Names}
+
+While feature tests are definitely the best approach, a `configure' script may 
+occasionally (偶爾,間或) have to make a decision based on a configuration 
+name. This may be necessary if certain code must be compiled differently 
+based on something which can not be tested using a standard Autoconf feature 
+test. For instance, the expect (預料; 預期) package needs to find 
+information about the system's `tty' implementation; this can't 
+reliably (可靠地; 確實地) be done when cross compiling without examining 
+the particular configuration name.
+
+It is normally better to test for particular features, rather than to test for 
+a particular system type. This is because as Unix and other operating 
+systems evolve (使逐步形成; 發展, 展開) , different systems copy features 
+from one another.
+
+When there is no alternative to testing the configuration name in 
+a `configure' script, it is best to define a macro which describes the feature,
+rather than defining a macro which describes the particular system. This 
+permits the same macro to be used on other systems which 
+adopt (採取; 採納; 吸收) the 
+same feature (see chapter \ref{C_Writing_New_Macros_for_Autoconf}
+Writing New Macros for Autoconf,
+page \pageref{C_Writing_New_Macros_for_Autoconf}).
+
+Testing\marginpar{test a particular system 一般都會使用 case 敘述。}
+for a particular system is normally done using a case statement in 
+the autoconf `configure.in' file. The case statement might look something 
+like the following, assuming that `host' is a shell variable holding a 
+canonical (標準的; 權威的) configuration system -- which will be the case 
+if `configure.in' uses the `AC\_{}CANONICAL\_{}HOST' 
+or `AC\_{}CANONICAL\_{}SYSTEM' macros.
+
+ 	
+\begin{verbatim}
+case "${host}" in
+i[[3456]]86-*-linux-gnu*) do something ;;
+sparc*-sun-solaris2.[[56789]]*) do something ;;
+sparc*-sun-solaris*) do something ;;
+mips*-*-elf*) do something ;;
+esac
+\end{verbatim}
+
+Note the doubled square brackets\marginpar{兩個中括弧} in this piece of code.
+These are used to work around an ugly implementation detail of autoconf --- it
+uses M4 under the hood (似風帽的東西; 罩; 車篷; 蓋子). Without these extra 
+brackets, the square brackets in the case statement would be
+swallowed (吞下, 嚥下) by M4, and would not appear in the 
+resulting `configure'. This nasty (難處理的, 問題多的; 討厭的) detail is 
+discussed at more length in \ref{C_M4} M4, page \pageref{C_M4}.
+
+It is particularly important to use `*' after the operating system field, in 
+order to match the version number which will be generated by `config.guess'.
+In most cases you must be careful to match a range of processor types. For 
+most processor families, a trailing `*' suffices, as in `mips*' above. For 
+the i386 family, something along (沿著; 順著) the lines of `i[34567]86' 
+suffices (足夠) \underline{at present} (目前; 現在). For the m68k family,
+you will need something like `m68*'. Of course, if you do not need to 
+match on the processor, it is simpler to just replace the entire field 
+by a `*', as in `*-*-irix*'. 
+

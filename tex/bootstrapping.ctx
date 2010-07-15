@@ -1,0 +1,150 @@
+\chapter{Bootstrapping}\label{C_Bootstrapping}
+
+
+There are many programs in the GNU Autotools, each of which has a complex set 
+of inputs. When one of these inputs changes, it is important to run the 
+proper programs in the proper order. Unfortunately, it is hard to remember 
+both the dependencies and the ordering. 
+
+For instance, whenever you edit `configure.in', you must remember to re-run 
+{\it aclocal} \underline{in case} (假使, 免得) you 
+added a reference to a new macro. You must also rebuild `configure' 
+by running {\it autoconf}; `config.h' by running {\it autoheader},
+in case you added a new AC\_{}DEFINE; and {\it automake}
+to propagate (繁殖, 增殖) any new AC\_{}SUBSTs to the various `Makefile.in's.
+If you edit a `Makefile.am', you must re-run {\it automake}.
+In both these cases, you must then remember 
+to re-run {\it config.status} -- recheck if `configure' changed, followed 
+by config.status to rebuild the `Makefile's. 
+
+
+When doing active development on the build system for your project,
+these dependencies quickly become painful. Of course,
+Automake \marginpar{Automake 知道如何去處理相依性的問題。}
+knows how to handle this automatically.
+By default, automake generates a `Makefile.in' 
+which knows all these dependencies and which automatically re-runs the 
+appropriate tools in the appropriate order. These rules assume that the 
+correct versions of the tools are all in your PATH. 
+
+
+It helps to have a script ready to do all of this for you once, before you 
+have generated a `Makefile' that will automatically run the tools in 
+the correct order, or when you make a fresh (新鮮的; 未經加工處理過的)
+checkout of the code from a CVS repository where the developers don't 
+keep generated files under source control. There are at least two 
+opposing (對面的; 相對的) schools (學派, 流派) of 
+thought regarding (關於; 就...而論) how to go about 
+this -- the \underline{autogen.sh school}
+and the \underline{bootstrap school}: 
+
+\begin{description}
+\item[autogen.sh]
+\ %
+
+\underline{From the outset} (開始), this is a poor (貧乏的, 缺少的, 不充足的)
+name for a bootstrap script,
+since there is already a GNU automatic text generation tool called AutoGen.
+Often packages that follow this convention have the script automatically 
+run the generated configure script after the boostrap process, passing 
+autogen.sh arguments through to configure. Except you don't know what options 
+you want yet, since you can't run `configure \verb+--+help' until configure 
+has been generated. I suggest that if you find yourself compiling a project 
+\underline{set up} (豎立; 建造, 建立, 創立) in this way that you type:
+
+\begin{Verbatim}[frame=single]
+$ /bin/sh ./autogen.sh --help
+\end{Verbatim}
+
+and ignore the spurious (假的; 偽造的; 欺騙性的) warning that tells you 
+configure will be executed. 
+
+\item[bootstrap]
+\ %
+
+Increasingly, projects are starting to call their bootstrap scripts `bootstrap'. Such scripts simply run the various commands required to bring the source tree into a state where the end user can simply:
+
+\begin{Verbatim}[frame=single]
+$ configure
+$ make
+$ make install
+\end{Verbatim}
+
+Unfortunately, proponents (提議人; 擁護者) of this school of thought don't put 
+the bootstrap script in their distributed tarballs, since the script is 
+unnecessary except when the build environment of a developer's machine 
+has changed. This means the proponents of the autogen.sh school may 
+never see the advantages of the other method. 
+\end{description}
+
+Autoconf comes with a program called autoreconf which essentially does the 
+work of the bootstrap script. autoreconf is rarely used because,
+historically, has not been very well known, and only in Autoconf 2.13 did 
+it acquire (取得, 獲得, 學到; 養成) the ability to work with Automake.
+Unfortunately, even the Autoconf 2.13 autoreconf does not handle 
+libtoolize and some automake-related options that are frequently nice to use. 
+
+
+We recommend the bootstrap method, until autoreconf is fixed. At this point 
+bootstrap has not been standardized, so here is a version of the script we 
+used while writing this book\footnote{This book is built using automake and autoconf. We couldn't find a use for libtool.}: 
+
+
+\begin{Verbatim}[frame=single]
+#! /bin/sh
+
+aclocal \
+&& automake --gnu --add-missing \
+&& autoconf
+\end{Verbatim}
+
+We don't use autoreconf here because that script (as of Autoconf 2.13) also 
+does not handle the `\verb+--+add-missing' option, which we want. A typical 
+bootstrap might also run libtoolize or autoheader. 
+
+
+It is also important for all developers on a project to have the same
+versions of the tools installed so that these rules don't 
+inadvertantly (不注意; 怠慢; 疏忽) cause problems due to differences 
+between tool versions. This version skew (斜的, 歪的, 偏的) problem 
+\underline{turns out to be}
+( (後接名詞或形容詞) 結果是...; 原來是...; 證明是...) fairly 
+significant (重要的, 重大的; 值得注意的) in the field. So,
+automake provides a way to disable these 
+rules by default, while still allowing users to enable them when they 
+know their environment is set up correctly. 
+
+
+In order to enable this mode, you must first add AM\_{}MAINTAINER\_{}MODE to
+ `configure.in'. This will add the `\verb+--+enable-maintainer-mode' option to `configure'; when specified this flag will cause these so-called `maintainer rules' to be enabled. 
+
+
+Note that maintainer mode is a controversial (爭論的; 可疑的) feature.
+Some people like to use it because it causes fewer bug reports in some 
+situations. For instance, CVS does not preserve relative timestamps on files.
+If your project has both `configure.in' and `configure' checked in, and 
+maintainer mode is not in use, then sometimes make will decide to 
+rebuild `configure' even though it is not really required.
+This \underline{in turn} (依次; 輪到) means more 
+headaches (令人頭痛的事, 麻煩) for your 
+developers -- on a large project most developers won't touch `configure.in' 
+and many may not even want to install 
+the GNU Autotools\footnote{Shock (震驚; 引起震驚的事件),
+horror (恐怖, 震驚, 毛骨悚然) }. 
+
+
+The other camp (陣營; 擁護某一主義) claims (主張, 斷言, 聲稱) that 
+end users should use the same build system that 
+developers use, that maintainer mode is simply 
+unaesthetic( aesthetic 審美的; 具有審美趣味),
+and furthermore (而且, 此外, 再者) that the modality (形式) of 
+maintainer mode is dangerous -- you can easily forget what mode you are 
+in and thus forget to rebuild, and thus correctly test, a change to 
+the configure or build system. When maintainer mode is not in use,
+the Automake-supplied missing script will be used to warn users 
+when it appears that they need a maintainer tool that they do not have. 
+
+
+The approach you take depends strongly on the 
+social (社交的, 交際的, 聯誼的) structures surrounding your project. 
+

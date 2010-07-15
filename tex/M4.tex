@@ -1,0 +1,503 @@
+\chapter{M4}\label{C_M4}
+M4 is a general purpose tool for processing text and has existed on Unix 
+systems of all kinds for many years, rarely catching the attention of users.
+Text generation through macro processing is not a new concept. Originally M4 
+was designed as the preprocessor for the Rational FORTRAN system and was 
+influenced by the General Purpose Macro generator, GPM, first described by 
+Stratchey in 1965! GNU M4 is the GNU project's implementation of M4 and was 
+written by Rene Seindal in 1990.\par
+In recent years, awareness of M4 has grown through its use by popular free software packages. The Sendmail package incorporates a configuration system that uses M4 to generate its complex `sendmail.cf' file from a simple specification of the desired configuration. Autoconf uses M4 to generate output files such as a `configure' script.\par
+It is somewhat unfortunate that users of GNU Autotools need to know so much about M4, because it has been too exposed. Many of these tools' implementation details were simply left up to M4, forcing the user to know about M4 in order to use them. It is a well-known problem and there is a movement amongst the development community to improve this shortcoming in the future. This deficiency is the primary reason that this chapter exists--it is important to have a good working knowledge of M4 in order to use the GNU Autotools and to extend it with your own macros (see section 23. Writing New Macros for Autoconf).\par
+The GNU M4 manual provides a thorough tutorial on M4. Please refer to it for additional information. 
+
+
+\section{What does M4 do?}
+
+m4 is a general purpose tool suitable for all kinds of text processing applications--not unlike the C preprocessor, cpp, with which you are probably familiar. Its obvious application is as a front-end for a compiler---m4 is in many ways superior to cpp.
+
+Briefly, m4 reads text from the input and writes processed text to the output. Symbolic macros may be defined which have replacement text. As macro invocations are encountered in the input, they are replaced (`expanded') with the macro's definition. Macros may be defined with a set of parameters and the definition can specify where the actual parameters will appear in the expansion. These concepts will be elaborated on in \ref{S_Fundamentals_of_M4_processing}
+Fundamentals of M4 processing, page \pageref{S_Fundamentals_of_M4_processing}.
+
+M4 includes a set of pre-defined macros that make it substantially more useful. The most important ones will be discussed in 21.4 Features of M4. These macros perform functions such as arithmetic, conditional expansion, string manipulation and running external shell commands. 
+
+\section{How GNU Autotools uses M4}
+
+The GNU Autotools may all appear to use M4, but in actual fact, it all boils down to autoconf that invokes m4 to generate your `configure' script. You might be surprised to learn that the shell code in `configure' does not use m4 to generate a final `Makefile' from `Makefile.in'. Instead, it uses sed, since that is more likely to be present on an end-user's system and thereby removes the dependency on m4.
+
+Automake and Libtool include a lot of M4 input files. These are macros provided with each package that you can use directly (or indirectly) from your `configure.in'. These packages don't invoke m4 themselves.
+
+If you have already installed Autoconf on your system, you may have encountered problems due to its strict M4 requirements. Autoconf demands to use GNU M4, mostly due to it exceeding limitations present in other M4 implementations. As noted by the Autoconf manual, this is not an onerous requirement, as it only affects package maintainers who must regenerate `configure' scripts.
+
+Autoconf's own `Makefile' will freeze some of the Autoconf `.m4' files containing macros as it builds Autoconf. When M4 freezes an input file, it produces another file which represents the internal state of the M4 processor so that the input file does not need to be parsed again. This helps to reduce the startup time for autoconf. 
+
+\section{Fundamentals of M4 processing}\label{S_Fundamentals_of_M4_processing}
+
+When properly understood, M4 seems like child's play. However, it is common to learn M4 in a piecemeal fashion and to have an incomplete or inaccurate understanding of certain concepts. Ultimately, this leads to hours of furious debugging. It is important to understand the fundamentals well before progressing to the details. 
+
+\subsection{Token scanning}
+
+m4 scans its input stream, generating (often, just copying) text to the output stream. The first step that m4 performs in processing is to recognize tokens. There are three kinds of tokens:
+
+\begin{description}
+\item[Names]
+\
+
+    A name is a sequence of characters that starts with a letter or an underscore and may be followed by additional letters, characters and underscores. The end of a name is recognized by the occurrence a character which is not any of the permitted characters--for example, a period. A name is always a candidate for macro expansion (\ref{S_Macros_and_macro_expansion} Macros and macro expansion
+page \pageref{S_Macros_and_macro_expansion}), whereby the name will be replaced in the output by a macro definition of the same name.
+
+\item[Quoted strings]
+\
+
+A sequence of characters may be quoted
+(\ref{S_Quoting} Quoting, page \pageref{S_Quoting}) with a starting quote at 
+the beginning of the string 
+and a terminating quote at the end. The default M4 quote characters 
+are ``' and `'', however Autoconf reassigns them to `[' and `]', respectively.
+Suffice to say, M4 will remove the quote characters and pass the inner string 
+to the output (\ref{S_Quoting} Quoting, page \pageref{S_Quoting}).
+
+\item[Other tokens]
+\
+
+    All other tokens are those single characters which are not recognized as belonging to any of the other token types. They are passed through to the output unaltered.
+\end{description}
+
+Like most programming languages, M4 allows you to write comments in the 
+input which will be ignored. Comments are delimited by the `\#' character and by the end of a line. Comments in M4 differ from most languages, though, in that the text within the comment, including delimiters, is passed through to the output unaltered. Although the comment delimiting characters can be reassigned by the user, this is highly discouraged, as it may break GNU Autotools macros which rely on this fact to pass Bourne shell comment lines--which share the same comment delimiters--through to the output unaffected. 
+
+\subsection{Macros and macro expansion}\label{S_Macros_and_macro_expansion}
+
+Macros are definitions of replacement text and are identified by a name--as defined by the syntax rules given in 21.3.1 Token scanning. M4 maintains an internal table of macros, some of which are built-ins defined when m4 starts. When a name is found in the input that matches a name registered in M4's macro table, the macro invocation in the input is replaced by the macro's definition in the output. This process is known as expansion---even if the new text may be shorter! Many beginners to M4 confuse themselves the moment they start to use phrases like `I am going to call this particular macro, which returns this value'. As you will see, macros differ significantly from functions in other programming languages, regardless of how similar their syntax may seem. You should instead use phrases like `If I invoke this macro, it will expand to this text'.
+
+Suppose M4 knows about a simple macro called `foo' that is defined to be `bar'. Given the following input, m4 would produce the corresponding output: 
+
+\begin{verbatim}
+That is one big foo.
+=>That is one big bar.
+\end{verbatim}
+
+The period character at the end of this sentence is not permitted in macro names, thus m4 knows when to stop scanning the `foo' token and consult the table of macro definitions for a macro named `foo'.
+
+Curiously, macros are defined to m4 using the built-in macro define. The example shown above would be defined to m4 with the following input:
+
+ 	
+\begin{verbatim}
+define(`foo', `bar')
+\end{verbatim}
+
+Since define is itself a macro, it too must have an expansion--by definition,
+it is the empty string, or void. Thus, m4 will appear to consume macro 
+invocations like these from the input. The ` and ' characters are M4's default 
+quote characters and play an important role (\ref{S_Quoting} Quoting,
+page \pageref{S_Quoting}). Additional built-in macros exist for managing macro 
+definitions (21.4.2 Macro management).
+
+We've explored the simplest kind of macros that exist in M4. To make macros substantially more useful, M4 extends the concept to macros which accept a number of arguments (49). If a macro is given arguments, the macro may address its arguments using the special macro names `$1' through to `$n', where `n' is the maximum number of arguments that the macro cares to reference. When such a macro is invoked, the argument list must be delimited by commas and enclosed in parentheses. Any whitespace that precedes an argument is discarded, but trailing whitespace (for example, before the next comma) is preserved. Here is an example of a macro which expands to its third argument:
+
+ 	
+\begin{verbatim}
+define(`foo', `$3')
+That is one big foo(3, `0x', `beef').
+=>That is one big beef.
+\end{verbatim}
+
+Arguments in M4 are simply text, so they have no type. If a macro which accepts arguments is invoked, m4 will expand the macro regardless of how many arguments are provided. M4 will not produce errors due to conditions such as a mismatched number of arguments, or arguments with malformed values/types. It is the responsibility of the macro to validate the argument list and this is an important practice when writing GNU Autotools macros. Some common M4 idioms have developed for this purpose and are covered in 21.4.3 Conditionals. A macro that expects arguments can still be invoked without arguments--the number of arguments seen by the macro will be zero:
+
+ 	
+
+\begin{verbatim}
+This is still one big foo.
+=>That is one big .
+\end{verbatim}
+
+A macro invoked with an empty argument list is not empty at all, but rather is considered to be a single empty string:
+
+ 	
+
+\begin{verbatim}
+This is one big empty foo().
+=>That is one big .
+\end{verbatim}
+
+It is also important to understand how macros are expanded. It is here that you will see why an M4 macro is not the same as a function in any other programming language. The explanation you've been reading about macro expansion thus far is a little bit simplistic: macros are not exactly matched in the input and expanded in the output. In actual fact, the macro's expansion replaces the invocation in the input stream and it is rescanned for further expansions until there are none remaining. Here is an illustrative example:
+
+ 	
+
+\begin{verbatim}
+define(`foobar', `FUBAR')
+define(`f', `foo')
+f()bar
+=>FUBAR
+\end{verbatim}
+
+If the token `a1' were to be found in the input, m4 would replace it with `a2' in the input stream and rescan. This continues until no definition can be found for a4, at which point the literal text `a4' will be sent to the output. This is by far the biggest point of misunderstanding for new M4 users.
+
+The same principles apply for the collection of arguments to macros which accept arguments. Before a macro's actual arguments are handed to the macro, they are expanded until there are no more expansions left. Here is an example--using the built-in define macro (where the problems are no different) which highlights the consequences of this. Normally, define will redefine any existing macro:
+
+ 	
+
+\begin{verbatim}
+define(foo, bar)
+define(foo, baz)
+\end{verbatim}
+
+In this example, we expect `foo' to be defined to `bar' and then redefined to `baz'. Instead, we've defined a new macro `bar' that is defined to be `baz'! Why? The second define invocation has its arguments expanded prior to the expanding the define macro. At this stage, the name `foo' is expanded to its original definition, bar. In effect, we've stated:
+
+ 	
+
+\begin{verbatim}
+define(foo, bar)
+define(bar, baz)
+\end{verbatim}
+
+Sometimes this can be a very useful property, but mostly it serves to thoroughly confuse the GNU Autotools macro writer. The key is to know that m4 will expand as much text as it can as early as possible in its processing. Expansion can be prevented by quoting (50) and is discussed in detail in the following section. 
+
+\subsection{Quoting}\label{S_Quoting}
+
+It is been shown how m4 expands macros when it encounters a name that matches a defined macro in the input. There are times, however, when you wish to defer expansion. Principally, there are three situations when this is so:
+
+\begin{description}
+\item[Free-form text]
+\
+
+    There may be free-form text that you wish to appear at the output--and as such, be unaltered by any macros that may be inadvertently invoked in the input. It is not always possible to know if some particular name is defined as a macro, so it should be quoted.
+
+\item[Overcoming syntax rules]
+\
+
+    Sometimes you may wish to form strings which would violate M4's syntax rules -- for example, you might wish to use leading whitespace or a comma in a macro argument. The solution is to quote the entire string.
+
+\item[Macro arguments]
+\
+
+    This is the most common situation for quoting: when arguments to macros are to be taken literally and not expanded as the arguments are collected. In the previous section, an example was given that demonstrates the effects of not quoting the first argument to define. Quoting macro arguments is considered a good practice that you should emulate. 
+\end{description}
+
+Strings are quoted by surrounding the quoted text with the ``' and `'' characters. When m4 encounters a quoted string--as a type of token (21.3.1 Token scanning)--the quoted string is expanded to the string itself, with the outermost quote characters removed.
+
+Here is an example of a string that is triple quoted:
+
+ 	
+\begin{verbatim}
+```foo'''
+=>``foo''
+\end{verbatim}
+
+A more concrete example uses quoting to demonstrate how to prevent unwanted expansion within macro definitions:
+
+ 	
+
+\begin{verbatim}
+define(`foo', ``bar'')dnl
+define(`bar', `zog')dnl
+foo
+=>bar
+\end{verbatim}
+
+When the macro `foo' is defined, m4 strips off the outermost quotes and registers the definition `bar'. The dnl text has a special purpose, too, which will be covered in 21.4.1 Discarding input.
+
+As the macro `foo' is expanded, the next pair of quote characters are stripped off and the string is expanded to `bar'. Since the expansion of the quoted string is the string itself (minus the quote characters), we have prevented unwanted expansion from the string `bar' to `zog'.
+
+As mentioned in 21.3.1 Token scanning, the default M4 quote characters are ``' and `''. Since these are two commonly used characters in Bourne shell programming (51), Autoconf reassigns these to the `[' and `]' characters--a symmetric looking pair of characters least likely to cause problems when writing GNU Autotools macros. From this point forward, we shall use `[' and `]' as the quote characters and you can forget about the default M4 quotes. 
+
+Autoconf uses M4's built-in changequote macro to perform this reassignment and, in fact, this built-in is still available to you. In recent years, the common practice when needing to use the quote characters `[' or `]' or to quote a string with an legitimately imbalanced number of the quote characters has been to invoke changequote and temporarily reassign them around the affected area:
+
+ 	
+\begin{verbatim}
+dnl Uh-oh, we need to use the apostrophe! And even worse, we have two
+dnl opening quote marks and no closing quote marks.
+changequote(<<, >>)dnl
+perl -e 'print "$]\n";'
+changequote([, ])dnl
+\end{verbatim}
+
+This leads to a few potential problems, the least of which is that it's easy to reassign the quote characters and then forget to reset them, leading to total chaos! Moreover, it is possible to entirely disable M4's quoting mechanism by blindly changing the quote characters to a pair of empty strings.
+
+In hindsight, the overwhelming conclusion is that using changequote within the GNU Autotools framework is a bad idea. Instead, leave the quote characters assigned as `[' and `]' and use the special strings @<:@ and @:>@ anywhere you want real square brackets to appear in your output. This is an easy practice to adopt, because it's faster and less error prone than using changequote:
+
+ 	
+
+\begin{verbatim}
+perl -e 'print "$@:>@\n";'
+\end{verbatim}
+
+This, and other guidelines for using M4 in the GNU Autotools framework are covered in detail in 21.5 Writing macros within the GNU Autotools framework. 
+
+\section{Features of M4}
+
+M4 includes a number of pre-defined macros that make it a powerful preprocessor. We will take a tour of the most important features provided by these macros. Although some of these features are not very relevant to GNU Autotools users, Autoconf is implemented using most of them. For this reason, it is useful to understand the features to better understand Autoconf's behavior and for debugging your own `configure' scripts. 
+
+\subsection{Discarding input}
+
+A macro called dnl discards text from the input. The dnl macro takes no arguments and expands to the empty string, but it has the side effect of discarding all input up to and including the next newline character. Here is an example of dnl from the Autoconf source code: 
+
+\begin{Verbatim}[frame=single]
+# AC_LANG_POP
+# -----------
+# Restore the previous language.
+define([AC_LANG_POP],
+[popdef([_AC_LANG])dnl
+ifelse(_AC_LANG, [_AC_LANG],
+        [AC_FATAL([too many $0])])dnl
+AC_LANG(_AC_LANG)])
+\end{Verbatim}
+
+It is important to remember dnl's behavior: it discards the newline character,
+which can have unexpected effects on generated `configure' scripts! If you 
+want a newline to appear in the output, you must add an extra blank line to 
+compensate.
+
+dnl need not appear in the first column of a given line -- it will begin discarding input at any point that it is invoked in the input file. However, be aware of the newline eating problem again! In the example of AC\_{}TRY\_{}LINK\_{}FUNC above, note the deliberate use of dnl to remove surplus newline characters.
+
+In general, dnl makes sense for macro invocations that appear on a single line, where you would expect the whole line to simply vanish from the output. In the following subsections, dnl will be used to illustrate where it makes sense to use it. 
+
+\subsection{Macro management}
+
+A number of built-in macros exist in M4 to manage macros. We shall examine the most common ones that you're likely to encounter. There are others and you should consult the GNU M4 manual for further information.
+
+The most obvious one is define, which defines a macro. It expands to the empty string: 
+
+\begin{verbatim}
+define([foo], [bar])dnl
+define([combine], [$1 and $2])dnl
+\end{verbatim}
+
+It is worth highlighting again the liberal use of quoting. We wish to define a pair of macros whose names are literally foo and combine. If another macro had been previously defined with either of these names, m4 would have expanded the macro immediately and passed the expansion of foo to define, giving unexpected results.
+
+The undefine macro will remove a macro's definition from M4's macro table. It also expands to the empty string: 
+
+\begin{verbatim}
+undefine([foo])dnl
+undefine([combine])dnl
+\end{verbatim}
+
+Recall that once removed from the macro table, unmatched text will once more be passed through to the output.
+
+The defn macro expands to the definition of a macro, named by the single argument to defn. It is quoted, so that it can be used as the body of a new, renamed macro:
+
+ 	
+
+\begin{verbatim}
+define([newbie], defn([foo]))dnl
+undefine([foo])dnl
+\end{verbatim}
+
+The ifdef macro can be used to determine if a macro name has an existing definition. If it does exist, ifdef expands to the second argument, otherwise it expands to the third: 
+
+\begin{verbatim}
+ifdef([foo], [yes], [no])dnl
+\end{verbatim}
+
+Again, yes and no have been quoted to prevent expansion due to any pre-existing macros with those names. Always consider this a real possibility!
+
+Finally, a word about built-in macros: these macros are all defined for you when m4 is started. One common problem with these macros is that they are not in any kind of name space, so it's easier to accidentally invoke them or want to define a macro with an existing name. One solution is to use the define and defn combination shown above to rename all of the macros, one by one. This is how Autoconf makes the distinction clear. 
+
+\subsection{Conditionals}
+
+Macros which can expand to different strings based on runtime tests are extremely useful--they are used extensively throughout macros in GNU Autotools and third party macros. The macro that we will examine closely is ifelse. This macro compares two strings and expands to a different string based on the result of the comparison. The first form of ifelse is akin to the if/then/else construct in other programming languages:
+
+ 	
+
+\begin{verbatim}
+ifelse(string1, string2, equal, not-equal)
+\end{verbatim}
+
+The other form is unusual to a beginner because it actually resembles a case statement from other programming languages:
+
+ 	
+
+\begin{verbatim}
+ifelse(string1, string2, equala, string3, string4, equalb, default)
+\end{verbatim}
+
+If `string1' and `string2' are equal, this macro expands to `equala'. If they are not equal, m4 will shift the argument list three positions to the left and try again:
+
+ 	
+
+\begin{verbatim}
+ifelse(string3, string4, equalb, default)
+\end{verbatim}
+
+If `string3' and `string4' are equal, this macro expands to `equalb'. If they are not equal, it expands to `default'. The number of cases that may be in the argument list is unbounded. 
+
+As it has been mentioned in \ref{S_Macros_and_macro_expansion} Macros and 
+macro expansion (page \pageref{S_Macros_and_macro_expansion}), macros that 
+accept arguments may access their arguments through specially named macros 
+like `\$1'. If a macro has been defined, no checking of argument counts is 
+performed before it is expanded and the macro may examine the number of 
+arguments given through the `\$\#' macro. This has a useful result: you may 
+invoke a macro with too few (or too many) arguments and the macro will still 
+be expanded. In the example below, `\$2' will expand to the empty string.
+
+ 	
+
+\begin{verbatim}
+define([foo], [$1 and $2])dnl
+foo([a])
+=>a and
+\end{verbatim}
+
+This is useful because m4 will expand the macro and give the macro the 
+opportunity to test each argument for the empty string. In effect, we have the 
+equivalent of default arguments from other programming languages. The macro 
+can use ifelse to provide a default value if, say, `\$2' is the empty string.
+You will notice in much of the documentation for existing Autoconf macros 
+that arguments may be left blank to accept the default value. This is an 
+important idiom that you should practice in your own macros.
+
+In this example, we wish to accept the default shell code fragment for the case where `/etc/passwd' is found in the build system's file system, but output `Big trouble!' if it is not.
+
+ 	
+
+\begin{verbatim}
+AC_CHECK_FILE([/etc/passwd], [], [echo "Big trouble!"])
+\end{verbatim}
+
+\subsection{Looping}
+
+There is no support in M4 for doing traditional iterations (ie. `for-do' loops), however macros may invoke themselves. Thus, it is possible to iterate using recursion. The recursive definition can use conditionals (21.4.3 Conditionals) to terminate the loop at its completion by providing a trivial case. The GNU M4 manual provides some clever recursive definitions, including a definition for a forloop macro that emulates a `for-do' loop.
+
+It is conceivable that you might wish to use these M4 constructs when writing macros to generate large amounts of in-line shell code or arbitrarily nested if; then; fi statements. 
+
+\subsection{Diversions}
+
+Diversions are a facility in M4 for diverting text from the input stream into a holding buffer. There is a large number of diversion buffers in GNU M4, limited only by available memory. Text can be diverted into any one of these buffers and then `undiverted' back to the output (diversion number 0) at a later stage.
+
+Text is diverted and undiverted using the divert and undivert macros. They expand to the empty string, with the side effect of setting the diversion. Here is an illustrative example:
+
+ 	
+
+\begin{verbatim}
+divert(1)dnl
+This goes at the end.
+divert(0)dnl
+This goes at the beginning.
+undivert(1)dnl
+=>This goes at the beginning.
+=>This goes at the end.
+\end{verbatim}
+
+
+It is unlikely that you will want to use diversions in your own macros, and it is difficult to do reliably without understanding the internals of Autoconf. However, it is interesting to note that this is how autoconf generates fragments of shell code on-the-fly that must precede shell code at the current point in the `configure' script. 
+
+\subsection{Including files}
+
+M4 permits you to include files into the input stream using the include and sinclude macros. They simply expand to the contents of the named file. Of course, the expansion will be rescanned as the normal rules dictate
+(\ref{S_Fundamentals_of_M4_processing} Fundamentals of M4 processing,
+page \pageref{S_Fundamentals_of_M4_processing}).
+
+The difference between include and sinclude is subtle: if the filename given as an argument to include is not present, an error will be raised. The sinclude macro will instead expand to the empty string--presumably the `s' stands for `silent'.
+
+Older GNU Autotools macros that tried to be modular would use the include and 
+sinclude macros to import libraries of macros from other sources. While this 
+is still a workable mechanism, there is an active effort within the GNU 
+Autotools development community to improve the packaging system for macros.
+An `\verb+--install+' option is being developed to improve the mechanism for 
+importing macros from a library. 
+
+\section{Writing macros within the GNU Autotools framework}
+
+With a good grasp of M4 concepts, we may turn our attention to applying these principles to writing `configure.in' files and new `.m4' macro files. There are some differences between writing generic M4 input files and macros within the GNU Autotools framework and these will be covered in this section, along with some useful hints on working within the framework. This section ties in closely with 23. Writing New Macros for Autoconf.
+
+Now that you are familiar with the capabilities of M4, you can forget about the names of the built-in M4 macros--they should be avoided in the GNU Autotools framework. Where appropriate, the framework provides a collection of macros that are laid on top of the M4 built-ins. For instance, the macros in the AC\_{} family are just regular M4 macros that take a number of arguments and rely on an extensive library of AC\_{} support macros. 
+
+\subsection{Syntactic conventions}
+
+Some conventions have grown over the life of the GNU Autotools, mostly as a disciplined way of avoiding M4 pitfalls. These conventions are designed to make your macros more robust, your code easier to read and, most importantly, improve your chances for getting things to work the first time! A brief list of recommended conventions appears below: 
+
+
+\begin{itemize}
+\item Do not use the M4 built-in changequote. Any good macro will already perform sufficient quoting.
+
+\item Never use the argument macros (e.g. `\$1') within shell comments and dnl remarks. If such a comment were to be placed within a macro definition, M4 will expand the argument macros leading to strange results. Instead, quote the argument number to prevent unwanted expansion. For instance, you would use `\$[1]' in the comment.
+
+\item Quote the M4 comment character, `\#'. This can appear often in shell code fragments and can have undesirable effects if M4 ignores any expansions in the text between the `\#' and the next newline.
+
+\item In general, macros invoked from `configure.in' should be placed one per line. Many of the GNU Autotools macros conclude their definitions with a dnl to prevent unwanted whitespace from accumulating in `configure'.
+
+\item Many of the AC\_{} macros, and others which emulate their good behavior, permit default values for unspecified arguments. It is considered good style to explicitly show your intention to use an empty argument by using a pair of quotes, such as [].
+
+\item Always quote the names of macros used within the definitions of other macros.
+
+\item When writing new macros, generate a small `configure.in' that uses (and abuses!) the macro--particularly with respect to quoting. Generate a `configure' script with autoconf and inspect the results.
+\end{itemize}
+
+\subsection{Debugging with M4}
+
+After writing a new macro or a `configure.in' template, the 
+generated `configure' script may not contain what you expect. Frequently 
+this is due to a problem in quoting (see section \ref{S_Quoting} Quoting,
+page \pageref{S_Quoting}), but the interactions between macros can be complex.
+When you consider that the arguments to GNU Autotools macros are often shell 
+scripts, things can get rather hairy. A number of techniques exist for 
+helping you to debug these kinds of problems.
+
+Expansion problems due to over-quoting and under-quoting can be difficult to pinpoint. Autoconf half-heartedly tries to detect this condition by scanning the generated `configure' script for any remaining invocations of the AC\_{} and AM\_{} families of macros. However, this only works for the AC\_{} and AM\_{} macros and not for third party macros.
+
+M4 provides a comprehensive facility for tracing expansions. This makes it possible to see how macro arguments are expanded and how a macro is finally expanded. Often, this can be half the battle in discovering if the macro definition or the invocation is at fault. Autoconf 2.15 will include this tracing mechanism. To trace the generation of `configure', Autoconf can be invoked like so:
+
+ 	
+\begin{verbatim}
+$ autoconf --trace=AC_PROG_CC
+\end{verbatim}
+
+Autoconf provides fine control over which macros are traced and the format of the trace output. You should refer to the Autoconf manual for further details.
+
+GNU m4 also provides a debugging mode that can be helpful in discovering problems such as infinite recursion. This mode is activated with the `-d' option. In order to pass options to m4, invoke Autoconf like so:
+
+ 	
+
+\begin{verbatim}
+$ M4='m4 -dV' autoconf
+\end{verbatim}
+
+Another situation that can arise is the presence of shell syntax errors in the 
+generated `configure' script. These errors are usually obvious, as the shell 
+will abort `configure' when the syntax error is encountered. The task of then 
+locating the troublesome shell code in the input files can be potentially quite 
+difficult. If the erroneous shell code appears in `configure.in', it should 
+be easy to spot--presumably because you wrote it recently! If the code is 
+imported from a third party macro, though, it may only be present because you 
+invoked that macro. A trick to help locate these kinds of errors is to place 
+some magic text (\_{}\_{}MAGIC\_{}\_{}) throughout `configure.in':
+
+ 	
+
+\begin{verbatim}
+AC_INIT
+AC_PROG_CC
+__MAGIC__
+MY_SUSPECT_MACRO
+__MAGIC__
+AC_OUTPUT(Makefile)
+\end{verbatim}
+
+After autoconf has generated `configure', you can search through it for the magic text to determine the extremities of the suspect macro. If your erroneous code appears within the magic text markers, you've found the culprit! Don't be afraid to hack up `configure'. It can easily be regenerated.
+
+Finally, due to an error on your part, m4 may generate a `configure' script that contains semantic errors. Something as simple as inverted logic may lead to a nonsense test result:
+
+ 	
+
+checking for /etc/passwd... no
+
+Semantic errors of this kind are usually easy to solve once you can spot them. A fast and simple way of tracing the shell execution is to use the shell's `-x' and `-v' options to turn on its own tracing. This can be done by explicitly placing the required set commands into `configure.in':
+
+ 	
+
+\begin{verbatim}
+AC_INIT
+AC_PROG_CC
+set -x -v
+MY_BROKEN_MACRO
+set +x +v
+AC_OUTPUT(Makefile)
+\end{verbatim}
+
+This kind of tracing is invaluable in debugging shell code containing semantic errors. 
+
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

@@ -1,0 +1,257 @@
+\chapter{Writing New Macros for Autoconf}\label{C_Writing_New_Macros_for_Autoconf}
+
+Autoconf is an extensible system which permits new macros to be written and shared between Autoconf users. Although it is possible to perform custom tests by placing fragments of shell code into your `configure.in' file, it is better practice to encapsulate that test in a macro. This encourages macro authors to make their macros more general purpose, easier to test and easier to share with other users.
+
+This chapter presents some guidelines for designing and implementing good Autoconf macros. It will conclude with a discussion of the approaches being considered by the Autoconf development community for improving the creation and distribution of macros. A more general discussion of macros can be found in 21.3.2 Macros and macro expansion. 
+
+\section{Autoconf Preliminaries}
+
+In a small package which only uses Autoconf, your own macros are placed in 
+the `aclocal.m4' file -- this includes macros that you may have obtained from 
+third parties such as the Autoconf macro archive
+(see section 23.5.1 Autoconf macro archive). If your package additionally uses Automake, then these macros should be placed in `acinclude.m4'. The aclocal program from Automake reads in macro definitions from `acinclude.m4' when generating `aclocal.m4'. When using Automake, for instance, `aclocal.m4' will include the definitions of AM\_{} macros needed by Automake.
+
+In larger projects, it's advisable to keep your custom macros in a more organized structure. Autoconf version 2.15 will introduce a new facility to explicitly include files from your `configure.in' file. The details have not solidified yet, but it will almost certainly include a mechanism for automatically included files with the correct filename extension from a subdirectory, say `m4/'. 
+
+\section{Reusing Existing Macros}
+
+It goes without saying that it makes sense to reuse macros where possible--indeed, a search of the Autoconf macro archive might turn up a macro which does exactly what you want, alleviating the need to write a macro at all (see section 23.5.1 Autoconf macro archive).
+
+It's more likely, though, that there will be generic, parameterized tests available that you can use to help you get your job done. Autoconf"s `generic' tests provide one such collection of macros. A macro that wants to test for support of a new language keyword, for example, should rely on the AC\_{}TRY\_{}COMPILE macro. This macro can be used to attempt to compile a small program and detect a failure due to, say, a syntax error.
+
+In any case, it is good practice when reusing macros to adhere to their publicized interface--do not rely on implementation details such as shell variables used to record the test's result unless this is explicitly mentioned as part of the macro's behavior. Macros in the Autoconf core can, and do, change their implementation from time to time.
+
+Reusing a macro does not imply that the macro is necessarily invoked from within the definition of your macro. Sometimes you might just want to rely on some action performed by a macro earlier in the configuration run--this is still a form of reuse. In these cases, it is necessary to ensure that this macro has indeed run at least once before your macro is invoked. It is possible to state such a dependency by invoking the AC\_{}REQUIRE macro at the beginning of your macro's definition.
+
+Should you need to write a macro from scratch, the following sections will provide guidelines for writing better macros. 
+
+\section{Guidelines for writing macros}
+
+There are some guidelines which should be followed when writing a macro. The criteria for a well-written macro are that it should be easy to use, well documented and, most importantly, portable. Portability is a difficult problem that requires much anticipation on the part of the macro writer. This section will discuss the design considerations for using a static Autoconf test at compile time versus a test at runtime. It will also cover some of the characteristics of a good macro including non-interactive behavior, properly formatted output and a clean interface for the user of the macro. 
+
+\subsection{Non-interactive behavior}
+
+Autoconf's generated `configure' scripts are designed to be non-interactive -- they should not prompt the user for input. Many users like the fact that `configure' can be used as part of a automated build process. By introducing code into `configure' which prompts a user for more information, you will prohibit unattended operation. Instead, you should use the AC\_{}ARG\_{}ENABLE macro in `configure.in' to add extra options to `configure' or consider runtime configuration (see section 23.3.2 Testing system features at application runtime). 
+
+\subsection{Testing system features at application runtime}
+
+When pondering how to handle a difficult portability problem or configurable option, consider whether the problem is better solved by performing tests at runtime or by providing a configuration file to customize the application. Keep in mind that the results of tests that Autoconf can perform will ultimately affect how the program will be built--and can limit the number of machines that the program can be moved to without recompiling it. Here is an example where this consideration had to be made in a real life project:
+
+The pthreads for Win32 project has sought to provide a standards compliant implementation for the POSIX threads API. It does so by mapping the POSIX API functions into small functions which achieve the desired result using the Win32 thread API. Windows 95, Windows 98 and Windows NT have different levels of support for a system call primitive that attempts to enter a critical section without blocking. The TryEnterCriticalSection function is missing on Windows 95, is an inoperative stub on Windows 98, and works as expected on Windows NT. If this behavior was to be checked by `configure' at compile time, then the resultant library would only work on the variant of Windows that it was compiled for. Because it's more common to distribute packages for Windows in binary form, this would be an unfortunate situation. Instead, it is sometimes preferable to handle this kind of portability problem with a test, performed by your code at runtime. 
+
+\subsection{Output from macros}
+
+Users who run `configure' expect a certain style of output as tests are performed. As such, you should use the well-defined interface to the existing Autoconf macros for generating output. Your tests should not arbitrarily echo messages to the standard output.
+
+Autoconf provides the following macros to output the messages for you in a consistent way (see section 3. How to run configure and make). They are introduced here with a brief description of their purpose and are documented in more detail in D. Autoconf Macro Reference. Typically, a test starts by invoking AC\_{}MSG\_{}CHECKING to describe to the user what the test is doing and AC\_{}MSG\_{}RESULT is invoked to output the result of the test.
+
+\begin{description}
+\item[`AC\_{}MSG\_{}CHECKING']
+\
+
+    This macro is used to notify the user that a test is commencing. It prints the text `checking' followed by your message and ends with `...'. You should use `AC\_{}MSG\_{}RESULT' after this macro to output the result of the test. 
+\item[`AC\_{}MSG\_{}RESULT']
+\
+
+    This macro notifies the user of a test result. In general, the result should be the word `yes' or `no' for boolean tests, or the actual value of the result, such as a directory or filename. 
+\item[`AC\_{}MSG\_{}ERROR']
+\
+
+    This macro emits a hard error message and aborts `configure'--this should be used for fatal errors. 
+\item[`AC\_{}MSG\_{}WARN']
+\
+
+    This macro emits a warning to the user and proceeds. 
+\end{description}
+
+\subsection{Naming macros}
+
+Just like functions in a C program, it's important to choose a good name for your Autoconf macros. A well-chosen name helps to unambiguously describe the purpose of the macro. Macros in M4 are all named within a single namespace and, thus, it is necessary to follow a convention to ensure that names retain uniqueness. This reasoning goes beyond just avoiding collisions with other macros--if you happen to choose a name that is already known to M4 as a definition of any kind, your macro's name could be rewritten by the prior definition during macro processing.
+
+One naming convention has emerged--prefixing each macro name with the name of the package that the macro originated in or the initials of the macro's author. Macros are usually named in a hierarchical fashion, with each part of the name separated by underscores. As you move left-to-right through each component of the name, the description becomes more detailed. There are some high-level categories of macros suggested by the Autoconf manual that you may wish to use when forming a descriptive name for your own macro. For example, if your macro tries to discover the existence of a particular C structure, you might wish to use C and STRUCT as components of its name. 
+
+\begin{description}
+\item[`C']
+\
+
+    Tests related to constructs of the C programming language. 
+\item[`DECL']
+\
+
+    Tests for variable declarations in header files. 
+\item[`FUNC']
+\
+
+    Tests for functions present in (or absent from) libraries. 
+\item[`HEADER']
+\
+
+    Tests for header files. 
+\item[`LIB']
+\
+
+    Tests for libraries. 
+\item[`PATH']
+\
+
+    Tests to discover absolute filenames (especially programs). 
+\item[`PROG']
+\
+
+    Tests to determine the base names of programs. 
+\item[`STRUCT']
+\
+
+    Tests for definitions of C structures in header files. 
+\item[`SYS']
+\
+
+    Tests for operating system features, such as restartable system calls. 
+\item[`TYPE']
+\
+
+    Tests for built-in or declared C data types. 
+\item[`VAR']
+\
+
+    Tests for C variables in libraries.
+\end{description}
+
+Some examples of macro names formed in this way include:
+
+\begin{description}
+\item[`AC\_{}PROG\_{}CC']
+\
+
+    A test that looks for a program called cc.
+
+\item[`AC\_{}C\_{}INLINE']
+\
+
+    A test that discovers if the C keyword inline is recognized.
+
+\item[`bje\_{}CXX\_{}MUTABLE']
+\
+
+    A test, written by "bje", that discovers if the C++ keyword mutable is recognized. 
+\end{description}
+
+\subsection{Macro interface}
+
+When designing your macro, it is worth spending some time deciding on what your macro's interface--the macro's name and argument list--will be. Often, it will be possible to extract general purpose functionality into a generic macro and to write a second macro which is a client of the generic one. Like planning the prototype for a C function, this is usually a straightforward process of deciding what arguments are required by the macro to perform its function. However, there are a couple of further considerations and they are discussed below.
+
+M4 macros refer to their arguments by number with a syntax such as \$1. It is 
+typically more difficult to read an M4 macro definition and understand what each argument's designation is than in a C function body, where the formal argument is referred to by its name. Therefore, it's a good idea to include a standard comment block above each macro that documents the macro and gives an indication of what each argument is for. Here is an example from the Autoconf source code: 
+
+\begin{Verbatim}[frame=single]
+#AC_CHECK_FILE(FILE, [ACTION-IF-FOUND], [ACTION-IF-NOT-FOUND])
+#-------------------------------------------------------------
+#
+#Check for the existence of FILE.
+\end{Verbatim}
+
+To remain general purpose, the existing Autoconf macros follow the convention of keeping side-effects outside the definition of the macro. Here, when a user invokes `AC\_{}CHECK\_{}FILE', they must provide shell code to implement the side effect that they want to occur if the `FILE' is found or is not found. Some macros implement a basic and desirable action like defining a symbol like `HAVE\_{}UNISTD\_{}H' if no user-defined actions are provided. In general, your macros should provide an interface which is consistent with the interfaces provided by the core Autoconf macros.
+
+M4 macros may have variable argument lists, so it is possible to implement macros which have defaults for arguments. By testing each individual argument against the empty string with `ifelse', it is possible for users to accept the default behavior for individual arguments by passing empty values: 
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_FILE([/etc/passwd], [],
+              [AC_MSG_ERROR([something is really wrong])])
+\end{Verbatim}
+
+One final point to consider when designing the interface for a macro is how to handle macros that are generic in nature and, say, wish to set a cache variable whose name is based on one of the arguments. Consider the `AC\_{}CHECK\_{}HEADER' macro--it defines a symbol and makes an entry in the cache that reflects the result of the test it performs. `AC\_{}CHECK\_{}HEADER' takes an argument -- namely the name of a header file to look for. This macro cannot just make a cache entry with a name like ac\_{}cv\_{}check\_{}header, since it would only work once; any further uses of this macro in `configure.in' would cause an incorrect result to be drawn from the cache. Instead, the name of the symbol that is defined and the name of the cache variable that is set need to be computed from one of the arguments: the name of the header file being sought. What we really need is to define HAVE\_{}UNISTD\_{}H and set the cache variable ac\_{}cv\_{}header\_{}unistd\_{}h. This can be achieved with some sed and tr magic in the macro which transforms the filename into uppercase characters for the call to AC\_{}DEFINE and into lowercase for the cache variable name. Unknown characters such as `.' need to be transformed into underscores.
+
+Some existing macros also allow the user to pass in the name of a cache variable name so that the macro does not need to compute a name. In general, this should be avoided, as it makes the macro harder to use and exposes details of the caching system to the user. 
+
+\section{Implementation specifics}
+
+This section provides some tips about how to actually go about writing your macros once you've decided what it is that you want to test and how to go about testing for it. It covers writing shell code for the test and optionally caching the results of those tests. 
+
+\subsection{Writing shell code}
+
+It is necessary to adopt a technique of writing portable Bourne shell code. 
+Often, shell programming tricks you might have learned are actually extensions 
+provided by your favorite shell and are non-portable. When in doubt, check 
+documentation or try the construct on another system's Bourne shell. For a 
+thorough treatment of this topic, \ref{C_Writing_Portable_Bourne_Shell}
+Writing Portable Bourne Shell, page \pageref{C_Writing_Portable_Bourne_Shell}. 
+
+\subsection{Using M4 correctly}
+
+Writing macros involves interacting with the M4 macro processor, which expands your macros when they are used in `configure.in'. It is crucial that your macros use M4 correctly--and in particular, that they quote strings correctly. 21. M4 for a thorough treatment of this topic. 
+
+\subsection{Caching results}
+
+Autoconf provides a caching facility, whereby the results of a test may 
+be stored in a cache file. The cache file is itself a Bourne shell script 
+which is sourced by the `configure' script to set any `cache variables' to 
+values that are present in the cache file.
+
+The next time `configure' is run, the cache will be consulted for a prior 
+result. If there is a prior result, the value is re-used and the code that 
+performs that test is skipped. This speeds up subsequent runs of `configure' 
+and configuration of deep trees, which can share a cache file in the 
+top-level directory (see chapter \ref{C_How_to_run_configure_and_make}
+How to run configure and make, page \pageref{C_How_to_run_configure_and_make}).
+
+A custom macro is not required to do caching, though it is considered best practice. Sometimes it doesn't make sense for a macro to do caching--tests for system aspects which may frequently change should not be cached. For example, a test for free disk space should not employ caching as it is a dynamic characteristic.
+
+The `AC\_{}CACHE\_{}CHECK' macro is a convient wrapper for caching the results of tests. You simply provide a description of the test, the name of a cache variable to store the test result to, and the body of the test. If the test has not been run before, the cache will be primed with the result. If the result is already in the cache, then the cache variable will be set and the test will be skipped. Note that the name of the cache variable must contain `\_{}cv\_{}' in order to be saved correctly.
+
+Here is the code for an Autoconf macro that ties together many of the concepts introduced in this chapter: 
+
+\begin{Verbatim}[frame=single]
+# AC_PROG_CC_G
+# ------------
+AC_DEFUN(AC_PROG_CC_G,
+[AC_CACHE_CHECK(whether ${CC-cc} accepts -g, ac_cv_prog_cc_g,
+[echo 'void f(){}' > conftest.c
+if test -z "${CC-cc} -g -c conftest.c 2>&1`"; then
+  ac_cv_prog_cc_g=yes
+else
+  ac_cv_prog_cc_g=no
+fi
+rm -f conftest*
+])]) # AC_PROG_CC_G
+\end{Verbatim}
+
+\section{Future directions for macro writers}
+
+A future trend for Autoconf is to make it easier to write reliable macros 
+and re-use macros written by others. This section will describe some of 
+the ideas that are currently being explored by those actively working 
+on Autoconf. 
+
+\subsection{Autoconf macro archive}
+
+In mid-1999, an official Autoconf macro archive was established on the World Wide Web by Peter Simons in Germany. The archive collects useful Autoconf macros that might be useful to some users, but are not sufficiently general purpose to include in the core Autoconf distribution. The URL for the macro archive is:
+ 	
+
+\begin{Verbatim}[frame=single]
+http://cryp.to/autoconf-archive/
+\end{Verbatim}
+
+It is possible to retrieve macros that perform different kinds of tests from this archive. The macros can then be inserted, in line, into your `aclocal.m4' or `acinclude.m4' file. The archive has been steadily growing since its inception. Please try and submit your macros to the archive! 
+
+\subsection{Primitive macros to aid in building macros}
+
+Writing new macros is one aspect of Autoconf that has proven troublesome to 
+users in the past, since this is one area where Autoconf's implementation 
+details leak out. Autoconf extensively uses m4 to perform the translation 
+of `configure.in' to `configure'. Thus, it is necessary to understand 
+implementation details such as M4s quoting rules in order to write Autoconf 
+macros (\ref{C_M4} M4, page \pageref{C_M4}).
+
+Another aspect of macro writing which is extremely hard to get right is 
+writing portable Bourne shell scripts
+(see chapter \ref{C_Writing_Portable_Bourne_Shell}
+Writing Portable Bourne Shell, page \pageref{C_Writing_Portable_Bourne_Shell}).
+Writing portable software, be it in Bourne shell or C++, is something that can only be mastered with years of experience--and exposure to many different kinds of machines! Rather than expect all macro writers to acquire this experience, it makes sense for Autoconf to become a `knowledge base' for this experience.
+
+With this in mind, one future direction for Autoconf will be to provide a library of low-level macros to assist in writing new macros. By way of hypothetical example, consider the benefit of using a macro named AC\_{}FOREACH instead of needing to learn the hard way that some vendor's implementation of Bourne shell has a broken for loop construct. This idea will be explored in future versions of Autoconf.
+
+When migrating existing packages to the GNU Autotools, which is the topic of the next chapter, it is worth remember these guidelines for best practices as you write the necessary tests to make those packages portable. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+

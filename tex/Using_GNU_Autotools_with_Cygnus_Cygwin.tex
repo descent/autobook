@@ -1,0 +1,1089 @@
+\chapter{Using GNU Autotools with Cygnus Cygwin}
+
+It is possible to use the GNU Autotools to build software packages on Windows. Since the tools were developed on Unix, it is easier to get them to work using Cygnus Solutions' Cygwin distribution which provides a POSIX wrapper for the Win32 API, See section The Diversity of Unix Systems, but it is certainly possible to run the tools within other Windows environments, notably Colin Peters' Mingw32 and D.J. Delorie's DJGPP. These development environments are freely available on the Internet(56). Unlike Cygwin, these other environments are designed for developing with the Win32 API directly and consequently they are not as useful for porting Unix projects to Windows or writing code that works on both Windows and Unix, see 15.3 Unix/Windows Portability for more details. This chapter describes the process of using GNU Autotools with Cygwin, although some of this advice also applies to employing some of the other GNU based Windows development environments. 
+
+\begin{quote}
+It is notable that the recent Cygwin ports of GCC and binutils can produce binaries which will run with the `cygwin1.dll' emulation layer, or linked against `CRTDLL.DLL', the Windows native C RunTime Dynamic Link Library depending on the needs of particular source code. Recent versions(57) of the binutils implement the PE-COFF binary format used by Windows, so by specifying the `-mno-cygwin' compiler option to the Cygwin compiler and using only the API from `CRTDLL.DLL', you can build binaries which are independent of the `cygwin1.dll' DLL. Such binaries will generally run faster, since they bypass the POSIX emulation, and give easier access to Windows specific things such as drive letters. Source code designed to be compiled this way will not compile on Unix however, since it will be limited to the Win32 API provided by `CRTDLL.DLL'.
+\end{quote}
+
+After reading this chapter, you will be able to install and use GNU Autotools natively under Windows using Cygnus Solutions' Cygwin environment, both to develop your own packages with the aid of Cygwin, and to compile, install, and to a certain degree port other peoples packages for use with Cygwin. As a Unix package developer, you will learn how to write your configury to be Windows friendly, and to be aware of certain quirks of Windows which can affect the portability of packages which need to work on Windows in addition to your Unix development machine.
+
+\section{Preliminaries}
+
+As explained in 25.2 Installing GNU Autotools on Cygwin, GNU Autotools requires several other tools to operate. Most Unices provide the majority, if not all, of these prerequisites by default. Windows, unfortunately, does not. Cygwin is better than most in this respect, and only a few extras are required. The latest net release of Cygwin(58) has a packaging mechanism which downloads and installs various Unix tools that have been precompiled for the Cygwin environment by the Cygnus folks. To develop with GNU Autotools and Cygwin, you need to install all of these packages to make sure you have all of the necessary header files and compiler tools. 
+
+\begin{description}
+\item[Bourne shell]
+\
+
+    Cygwin provides a port of ash which is smaller and faster than bash, but sometimes rejects arcane Bourne shell scripts. If you can stand to sacrifice a little speed, it is worth copying the supplied bash.exe to `/bin/sh.exe' to forestall any such problems.
+
+\item[GNU M4]
+\
+
+    Cygwin provides a port of GNU M4.
+
+\item[GNU Make]
+\
+
+    At the time of writing, developers need GNU Make in order to do dependency tracking (see section Automatic depedency tracking), though this is set to change in a future release of Automake. Cygwin version 1.1.1 comes with a port of GNU make-3.77, which I have personally never had any problems with. The received wisdom from users is to manually upgrade to the latest version, make-3.79(59), which compiles and installs from source without modification. Should you experience (or anticipate) any Make related problems, you might try upgrading to this version or later.
+
+\item[GNU GCC]
+\
+
+    At the time of writing, GNU GCC is also needed by Automake in order to do dependency tracking. Cygwin version 1.1.1 comes with a port of the latest GNU GCC compiler.
+
+\item[Perl]
+\
+
+    The current implementation of Automake (1.4) is written in perl4, though it is likely that perl5 will be needed for Automake 1.5. The very latest versions of Perl now compile out of the box on Cygwin(60).
+\end{description}
+
+There are some other pitfalls to installing a fully working Cygwin environment on your Windows machine, but that is outside the scope of this chapter. Cygnus host a mailing list archive and an FAQ(61) to provide some level of support, and these should be your first port of call in case the installation does not go according to plan.
+
+\section{Installing GNU Autotools on Cygwin }
+
+With all of the above infrastructure in place, each of the GNU Autotools can be built natively and installed from source right out of the box. It is worth taking care with the installation directories, as there is no package management under Cygwin, and it is easy to let everything get thrown into a big pile in `/usr/local', which makes it relatively difficult to upgrade and remove packages. 
+
+Support for Cygwin has been in Autoconf for several years, as far back as version 2.0 as best as I can tell. Building it has never been a problem as long as GNU M4 and a Bourne Shell are available, it is the macros themselves which offer this support. Of course, any Autoconf macros you write yourself must be designed carefully to not make any assumptions about being executed on Unix if the Cygwin compatibility is to remain. A binary package of Autoconf for Cygwin version 1.1.1 is available from the CygUtils website(62). 
+
+Automake joined the fray much later than the Cygwin support code was added to Autoconf, and has consequently always supported Cygwin. Until the last release of Cygwin, the stumbling block has always been finding (or building) a Cygwin compatible Perl interpreter for Automake to use. Thanks to the work of Eric Fifer, Perl 5.6.0 builds right out of the box on Cygwin, removing this problem entirely. Ready built packages of Perl and Automake are available from the CygUtils website. 
+
+The initial Libtool support for Windows was written by Ian Lance Taylor of Cygnus Solutions, when Cygwin was at release b18, See section Microsoft Windows. More recent releases of Cygwin in general, and GCC in particular have much better facilities for building and linking with Windows DLLs, to the extent that with a little perseverance it is possible to build DLLs with GCC from C++ sources, and to have those DLLs interoperate with DLLs built with Windows development environments. In time, automation of these facilities will make their way into Libtool. The method that Libtool currently uses to build DLLs works with Cygwin releases at least as far back as b18, and at least as far forward as the version I am now using, Cygwin-1.1.1. The same code will also build DLLs correctly with Mingw32. There are certainly simpler ways to assemble a DLL, but Libtool aims to combine two goals which are somewhat in contention with Windows' treatment of DLLs; Libtool is aiming for maximum portability across the various flavours of DLL-using Windows build environments; not forgetting Libtool's raison d'etre which is to abstract the many and varied ways of building libraries on different targets behind a single unified interface. To meet these two goals, Libtool must only use tools which exist across the range of versions it supports, and must at the same time try to make DLLs appear to have the same characteristics as a modern ELF shared library, such as the shared libraries under GNU/Linux. This is no mean feat, and in fact Libtool still has some way to go in order to be able to do this convincingly. It turns out that Windows DLLs lack many, many features that packages developed on Unix are likely to take for granted. Emulation of these missing features are making their way into Libtool. Although support for DLLs is improving steadily with every release, there are some severe technical problems with the Windows library architecture that will prevent Libtool from ever being able to build DLLs completely transparently. The details are extremely technical and beyond the scope of this book. 
+
+As noted in A.3 Installing the tools, things will only work correctly if each 
+of Autoconf, Automake and Libtool are installed with the same `\verb+--prefix+'
+argument, since they all share a macro directory in `\$prefix/share/aclocal'. 
+
+
+\section{Writing A Cygwin Friendly Package}
+
+One approach to using the Cygwin support offered by GNU Autotools in your own package is to have an eye towards having it compile nicely on Unix and on Windows, or indeed of tweaking the configuration of existing packages which use GNU Autotools but which do not compile under Cygwin, or do not behave quite right after compilation. There are several things you need to be aware of in order to design a package to work seamlessly under Cygwin, and yet several more if portability to DOS and (non-Cygwin) Windows is important too. We discussed many of these issues in 15.3.5 Unix/Windows Issues. In this section, we will expand on those issues with ways in which GNU Autotools can help deal with them.
+
+If you only need to build executables and static libraries, then Cygwin provides an environment close enough to Unix that any packages which ship with a relatively recent configuration will compile pretty much out of the box, except for a few peculiarites of Windows which are discussed throughout the rest of this section. If you want to build a package which has not been maintained for a while, and which consequently uses an old Autoconf, then it is usually just a matter of removing the generated files, rebootstrapping the package with the installed (up to date!) Autoconf, and rerunning the `configure' script. On occasion some tweaks will be needed in the `configure.in' to satisfy the newer autoconf, but autoconf will almost always diagnose these for you while it is being run. 
+
+\subsection{Text vs Binary Modes}
+
+As discussed in subsubsection Text and Binary Files,
+page \pageref{SSS_Text_and_Binary_Files}, text and binary files are different on Windows. Lines in a Windows text files end in a carriage return/line feed pair, but a C program reading the file in text mode will see a single line feed.
+
+Cygwin has several ways to hide this dichotomy, and the solution(s) you choose will depend on how you plan to use your program. I will outline the relative tradeoffs you make with each choice:
+
+
+\begin{description}
+\item [mounting]
+\
+
+    Before installing an operating system to your hard drive, you must first organise the disk into partitions. Under Windows, you might only have a single partition on the disk, which would be called `C:'(63). Provided that some media is present, Windows allows you to access the contents of any drive letter -- that is you can access `A:' when there is a floppy disk in the drive, and `F:' provided you divided you available drives into sufficient partitions for that letter to be in use. With Unix, things are somewhat different: hard disks are still divided into partitions (typically several), but there is only a single filesystem mounted under the root directory. You can use the mount command to hook a partition (or floppy drive or CD-ROM, etc.) into a subdirectory of the root filesystem:
+
+\begin{Verbatim}[frame=single]
+$ mount /dev/fd0 /mnt/floppy
+$ cd /mnt/floppy
+\end{Verbatim}
+
+Until the directory is unmounted, the contents of the floppy disk will be available as part of the single Unix filesystem in the directory, `/mnt/floppy'. This is in contrast with Windows' multiple root directories which can be accessed by changing filesystem root -- to access the contents of a floppy disk:
+
+\begin{Verbatim}[frame=single]
+C:\WINDOWS\> A:
+A:> DIR
+...
+\end{Verbatim}
+
+Cygwin has a mounting facility to allow Cygwin applications to see a single unified file system starting at the root directory, by mounting drive letters to subdirectories. When mounting a directory you can set a flag to determine whether the files in that partition should be treated the same whether they are TEXT or BINARY mode files. Mounting a file system to treat TEXT files the same as BINARY files, means that Cygwin programs can behave in the same way as they might on Unix and treat all files as equal. Mounting a file system to treat TEXT files properly, will cause Cygwin programs to translate between Windows CR-LF line end sequences and Unix CR line endings, which plays havoc with file seeking, and many programs which make assumptions about the size of a char in a FILE stream. However `binmode' is the default method because it is the only way to interoperate between Windows binaries and Cygwin binaries. You can get a list of which drive letters are mounted to which directories, and the modes they are mounted with by running the mount command without arguments:
+
+\begin{Verbatim}[frame=single]
+BASH.EXE-2.04$ mount
+Device           Directory      Type        flags
+C:\cygwin        /              user        binmode
+C:\cygwin\bin    /usr/bin       user        binmode
+C:\cygwin\lib    /usr/lib       user        binmode
+D:\home          /home          user        binmode
+\end{Verbatim}
+
+    As you can see, the Cygwin mount command allows you to `mount' arbitrary Windows directories as well as simple drive letters into the single filesystem seen by Cygwin apllications.
+
+\item[binmode]
+\
+
+    The CYGWIN environment variable holds a space separated list of setup options which exert some minor control over the way the `cygwin1.dll' (or `cygwinb19.dll' etc.) behaves. One such option is the `binmode' setting; if CYGWIN contains the `binmode' option, files which are opened through `cygwin1.dll' without an explicit text or binary mode, will default to binary mode which is closest to how Unix behaves.
+
+\item[system calls]
+\
+
+    `cygwin1.dll', GNU libc and other modern C API implementations accept extra flags for fopen and open calls to determine in which mode a file is opened. On Unix it makes no difference, and sadly most Unix programmers are not aware of this subtlety, so this tends to be the first thing that needs to be fixed when porting a Unix program to Cygwin. The best way to use these calls portably is to use the following macros with a package's `configure.in' to be sure that the extra arguments are available:
+
+\begin{Verbatim}[frame=single]
+# _AB_AC_FUNC_FOPEN(b | t, USE_FOPEN_BINARY | 
+# USE_FOPEN_TEXT)
+# ----------------------------------------------------
+define([_AB_AC_FUNC_FOPEN],
+[AC_CACHE_CHECK([whether fopen accepts "$1" mode],\
+  [ab_cv_func_fopen_$1],
+[AC_TRY_RUN([#include <stdio.h>
+int
+main ()
+{
+   FILE *fp = fopen ("conftest.bin", "w$1");
+   fprintf (fp, "\n");
+   fclose (fp);
+   return 0;
+}],
+            [ab_cv_func_fopen_$1=yes],
+            [ab_cv_func_fopen_$1=no],
+            [ab_cv_func_fopen_$1=no])])
+if test x$ab_cv_func_fopen_$1 = xyes; then
+  AC_DEFINE([$2], 1,
+   [Define this if we can use the "$1" \
+    mode for fopen safely.])
+fi[]dnl
+])# _AB_AC_FUNC_FOPEN
+
+# AB_AC_FUNC_FOPEN_BINARY
+# -----------------------
+# Test whether fopen accepts a "" in the mode 
+# string for binary file opening.  This makes no 
+# difference on most unices, but some OSes convert 
+# every newline written to a file to two bytes (CR LF),
+# and every CR LF read from a file is silently 
+# converted to a newline.
+AC_DEFUN([AB_AC_FUNC_FOPEN_BINARY], \
+ [_AB_AC_FUNC_FOPEN(b, USE_FOPEN_BINARY)])
+
+# AB_AC_FUNC_FOPEN_TEXT
+# ---------------------
+# Test whether open accepts a "t" in the mode string 
+# for text file opening.  This makes no difference on 
+# most unices, but other OSes use it to assert that 
+# every newline written to a file writes two 
+# bytes (CR LF), and every CR LF read from a file are 
+# silently converted to a newline.
+AC_DEFUN([AB_AC_FUNC_FOPEN_TEXT],   \
+ [_AB_AC_FUNC_FOPEN(t, USE_FOPEN_TEXT)])
+
+
+# _AB_AC_FUNC_OPEN(O_BINARY|O_TEXT)
+# ---------------------------------
+AC_DEFUN([_AB_AC_FUNC_OPEN],
+[AC_CACHE_CHECK([whether fcntl.h defines $1], \
+ [ab_cv_header_fcntl_h_$1],
+[AC_EGREP_CPP([$1],
+              [#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+$1
+],
+              [ab_cv_header_fcntl_h_$1=no],
+              [ab_cv_header_fcntl_h_$1=yes])
+if test "x$ab_cv_header_fcntl_h_$1" = xno; then
+  AC_EGREP_CPP([_$1],
+               [#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+_$1
+],
+                [ab_cv_header_fcntl_h_$1=0],
+                [ab_cv_header_fcntl_h_$1=_$1])
+fi])
+if test "x$ab_cv_header_fcntl_h_$1" != xyes; then
+ AC_DEFINE_UNQUOTED([$1], [$ab_cv_header_fcntl_h_$1],
+  [Define this to a usable value if the system provides \
+   none])
+fi[]dnl
+])# _AB_AC_FUNC_OPEN
+
+
+# AB_AC_FUNC_OPEN_BINARY
+# ----------------------
+# Test whether open accepts O_BINARY in the mode 
+# string for binary file opening.  This makes no 
+# difference on most unices, but some OSes convert 
+# every newline written to a file to two bytes (CR LF),
+# and every CR LF read from a file is silently 
+# converted to a newline.
+#
+AC_DEFUN([AB_AC_FUNC_OPEN_BINARY], \
+ [_AB_AC_FUNC_OPEN([O_BINARY])])
+
+
+# AB_AC_FUNC_OPEN_TEXT
+# --------------------
+# Test whether open accepts O_TEXT in the mode 
+# string for text file opening.  This makes no 
+# difference on most unices, but other OSes use it 
+# to assert that every newline written to a file 
+# writes two bytes (CR LF), and every CR LF read 
+# from a file are silently converted to a newline.
+#
+AC_DEFUN([AB_AC_FUNC_OPEN_TEXT],\
+ [_AB_AC_FUNC_OPEN([O_TEXT])])
+\end{Verbatim}
+
+Add the following preprocessor code to a common header file that will be included by any sources that use fopen calls:
+
+ 	
+
+\begin{Verbatim}[frame=single]
+#define fopen	rpl_fopen
+\end{Verbatim}
+
+Save the following function to a file, and link that into your program so that in combination with the preprocessor magic above, you can always specify text or binary mode to open and fopen, and let this code take care of removing the flags on machines which do not support them:
+
+ 	
+
+
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include <stdio.h>
+
+/* Use the system size_t if it has one, 
+   or fallback to config.h */
+#if STDC_HEADERS || HAVE_STDDEF_H
+#  include <stddef.h>
+#endif
+#if HAVE_SYS_TYPES_H
+#  include <sys/types.h>
+#endif
+
+/* One of the following headers will have prototypes 
+   for malloc and free on most systems.  If not, we don't 
+   add explicit prototypes which may generate a compiler 
+   warning in some cases -- explicit  prototypes would 
+   certainly cause compilation to fail with a type clash 
+   on some platforms. */
+#if STDC_HEADERS || HAVE_STDLIB_H
+#  include <stdlib.h>
+#endif
+#if HAVE_MEMORY_H
+#  include <memory.h>
+#endif
+
+#if HAVE_STRING_H
+#  include <string.h>
+#else
+#  if HAVE_STRINGS_H
+#    include <strings.h>
+#  endif /* !HAVE_STRINGS_H */
+#endif /* !HAVE_STRING_H */
+
+#if ! HAVE_STRCHR
+
+/* BSD based systems have index() instead of strchr() */
+#  if HAVE_INDEX
+#    define strchr index
+#  else /* ! HAVE_INDEX */
+
+/* Very old C libraries have neither index() or 
+   strchr() */
+#    define strchr rpl_strchr
+
+static inline 
+const char *strchr (const char *str, int ch);
+
+static inline const char *
+strchr (const char *str, int ch)
+{
+  const char *p = str;
+  while (p && *p && *p != (char) ch)
+    {
+      ++p;
+    }
+
+  return (*p == (char) ch) ? p : 0;
+}
+#  endif /* HAVE_INDEX */
+
+#endif /* HAVE_STRCHR */
+
+/* BSD based systems have bcopy() instead of strcpy() */
+#if ! HAVE_STRCPY
+# define strcpy(dest, src) \
+   bcopy(src, dest, strlen(src) + 1)
+#endif
+
+/* Very old C libraries have no strdup(). */
+#if ! HAVE_STRDUP
+# define strdup(str) \               
+   strcpy(malloc(strlen(str) + 1), str)
+#endif
+
+char*
+rpl_fopen (const char *pathname, char *mode)
+{
+ char *result = NULL;
+ char *p = mode;
+
+ /* Scan to the end of mode until we find 'b' or 't'. */ 
+ while (*p && *p != 'b' && *p != 't')
+ {
+  ++p;
+ }
+
+ if (!*p)
+ {
+  fprintf(stderr,"*WARNING* rpl_fopen \
+   called without mode 'b' or 't'\n");
+ }
+
+#if USE_FOPEN_BINARY && USE_FOPEN_TEXT
+    result = fopen(pathname, mode);
+#else
+    {
+        char ignore[3]= "bt";
+        char *newmode = strdup(mode);
+        char *q       = newmode;
+
+        p = newmode;
+
+#  if ! USE_FOPEN_TEXT
+        strcpy(ignore, "b")
+#  endif
+#  if ! USE_FOPEN_BINARY
+        strcpy(ignore, "t")
+#  endif
+
+   /* Copy characters from mode to newmode missing out
+      b and/or t. */
+        while (*p)
+          {
+            while (strchr(ignore, *p))
+              {
+                ++p;
+              }
+            *q++ = *p++;
+          }
+        *q = '\0';
+
+        result = fopen(pathname, newmode);
+
+        free(newmode);
+    }
+#endif /* USE_FOPEN_BINARY && USE_FOPEN_TEXT */
+
+    return result;
+}
+\end{Verbatim}
+
+The correct operation of the file above relies on several things having been checked by the configure script, so you will also need to ensure that the following macros are present in your `configure.in' before you use this code:
+
+\begin{Verbatim}[frame=single]
+# configure.in -- Process this file with 
+# autoconf to produce configure
+AC_INIT(rpl_fopen.c)
+
+AC_PROG_CC
+AC_HEADER_STDC
+AC_CHECK_HEADERS(string.h strings.h, break)
+AC_CHECK_HEADERS(stdlib.h stddef.h sys/types.h memory.h)
+
+AC_C_CONST
+AC_TYPE_SIZE_T
+
+AC_CHECK_FUNCS(strchr index strcpy strdup)
+AB_AC_FUNC_FOPEN_BINARY
+AB_AC_FUNC_FOPEN_TEXT
+\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+\end{description}
+
+\subsection{File System Limitations}
+
+We discussed some differences between Unix and Windows file systems in 15.3.5.2 File system Issues. You learned about some of the differences between Unix and Windows file syatems. This section expands on that discussion, covering filename differences and separator and drive letter distinctions. 
+
+\subsubsection{8.3 Filenames}
+
+As discussed earlier, DOS file systems have severe restrictions on possible file names: they must follow an 8.3 format. See section 15.3.5.3 DOS Filename Restrictions.
+
+This is quite a severe limitation, and affects some of the inner workings of GNU Autotools in two ways. The first is handled automatically, in that if .libs isn't a legal directory name on the host system, Libtool and Automake will use the directory \_{}libs instead. The other is that the traditional `config.h.in' file is not legal under this scheme, and it must be worked around with a little known feature of Autoconf:
+
+ 	
+
+AC\_{}CONFIG\_{}HEADER(config.h:config.hin)
+
+
+\subsubsection{Separators and Drive Letters}
+
+As discussed earlier (see section 15.3.5.6 Windows Separators and Drive Letters), the Windows file systems use different delimiters for separating directories and path elements than their Unix cousins. There are three places where this has an effect: 
+
+\begin{description}
+\item[the shell command line]
+\
+
+Up until Cygwin b20.1, it was possible to refer to drive letter prefixed 
+paths from the shell using the `//c/path/to/file' syntax to refer to 
+the directory root at `\verb+C:\path\to\file+'. Unfortunately, the 
+Windows kernel confused this with the its own network share notation, causing 
+the shell to pause for a short while to look for a machine named `c' in 
+its network neighbourhood. Since release 1.0 of Cygwin, 
+the `//c/path/to/file' notation now really does refer to a machine 
+named `c' from Cygwin as well as from Windows. To refer to drive letter 
+rooted paths on the local machine from Cygwin there is a new 
+hybrid `c:/path/to/file' notation. This notation also works in Cygwin b20, and 
+is probably the system you should use.
+
+    On the other hand, using the new hybrid notation in shell scripts means that they won't run on old Cygwin releases. Shell code embedded In `configure.in' scripts, should test whether the hybrid notation works, and use an alternate macro to translate hybrid notation to the old style if necessary.
+
+    I must confess that from the command line I now use the longer `/cygdrive/c/path/to/file' notation, since TAB completion doesn't yet work for the newer hybrid notation. It is important to use the new notation in shell scripts however, or they will fail on the latest releases of Cygwin.
+
+\item[shell scripts]
+\
+
+    For a shell script to work correctly on non-Cygwin development environments, it needs to be aware of and handle Windows path and directory separator and drive letters. The Libtool scripts use the following idiom:
+
+     	
+\begin{verbatim}
+case "$path" in
+# Accept absolute paths.
+[\\/]* | [A-Za-\]:[\\/]*)
+  # take care of absolute paths
+  insert some code here
+  ;;
+*)
+  # what is left must be a relative path
+  insert some code here
+  ;;
+esac
+\end{verbatim}
+
+\item[source code]
+\
+
+    When porting Unix software to Cygwin, this is much less of an issue 
+because these differences are hidden beneath the emulation layer, and by the 
+mount command respectively; although I have found that GCC, for example,
+returns a mixed mode `/' and `\verb+\+' delimitted include path which 
+upsets Automake's dependency tracking on occasion.
+
+    Cygwin provides convenience functions to convert back and forth between the different notations, which we call POSIX paths or path lists, and WIN32 paths or path lists: 
+
+\begin{description}
+\item[Function: int posix\_{}path\_{}list\_{}p (const char *path)]
+\
+
+    Return `0', unless path is a `/' and `:' separated path list. The determination is rather simplistic, in that a string which contains a `;' or begins with a single letter followed by a `:' causes the `0' return. 
+
+\item[Function: void cygwin\_{}win32\_{}to\_{}posix\_{}path\_{}list]
+\item[(const char *win32, char *posix)]
+\
+
+    Converts the `\' and `;' delimiters in win32, into the equivalent `/' and `:' delimiters while copying into the buffer at address posix. This buffer must be preallocated before calling the function. 
+
+\item[Function: void cygwin\_{}conv\_{}to\_{}posix\_{}path] 
+\item[(const char *path, char *posix\_{}path)]
+\
+
+    If path is a `\' delimitted path, the equivalent, `/' delimitted path is written to the buffer at address posix\_{}path. This buffer must be preallocated before calling the function. 
+
+\item[Function: void cygwin\_{}conv\_{}to\_{}full\_{}posix\_{}path]
+\item[(const char *path, char *posix\_{}path)]
+\
+
+    If path is a, possibly relative, `\' delimitted path, the equivalent, absolute, `/' delimitted path is written to the buffer at address posix\_{}path. This buffer must be preallocated before calling the function. 
+
+\item[Function: void cygwin\_{}posix\_{}to\_{}win32\_{}path\_{}list]
+\item[(const char *posix, char *win32)]
+\
+
+    Converts the `/' and `:' delimiters in posix, into the equivalent `\' and `;' delimiters while copying into the buffer at address win32. This buffer must be preallocated before calling the function. 
+
+\item[Function: void cygwin\_{}conv\_{}to\_{}win32\_{}path]
+\item[(const char *path, char *win32\_{}path)]
+\
+
+    If path is a `/' delimitted path, the equivalent, `\' delimitted path is written to the buffer at address win32\_{}path. This buffer must be preallocated before calling the function. 
+
+\item[Function: void cygwin\_{}conv\_{}to\_{}full\_{}win32\_{}path]
+\item[(const char *path, char *win32\_{}path)]
+\
+
+    If path is a, possibly relative, `/' delimitted path, the equivalent, absolute, `\' delimitted path is written to the buffer at address win32\_{}path. This buffer must be preallocated before calling the function. 
+\end{description}
+
+\end{description}
+
+You can use these functions something like this:
+
+\begin{Verbatim}[frame=single]
+void 
+display_canonical_path(const char *maybe_relative_or_win32)
+{  
+ char buffer[MAX_PATH];
+ cygwin_conv_to_full_posix_path(maybe_relative_or_win32,
+                                buffer);
+ printf("canonical path for %s:  %s\n",
+           maybe_relative_or_win32, buffer);
+}
+\end{Verbatim}
+
+For your code to be fully portable however, you cannot rely on these Cygwin functions as they are not implemented on Unix, or even mingw or DJGPP. Instead you should add the following to a shared header, and be careful to use it when processing and building paths and path lists:
+
+\begin{Verbatim}[frame=single]
+#if defined __CYGWIN32__ && !defined __CYGWIN__
+   /* For backwards compatibility with Cygwin b19 and
+      earlier, we define __CYGWIN__ here, so that
+      we can rely on checking just for that macro. */
+#  define __CYGWIN__  __CYGWIN32__
+#endif
+
+#if defined _WIN32 && !defined __CYGWIN__
+   /* Use Windows separators on all _WIN32 defining
+      environments, except Cygwin. */
+#  define DIR_SEPARATOR_CHAR		'\\'
+#  define DIR_SEPARATOR_STR		"\\"
+#  define PATH_SEPARATOR_CHAR		';'
+#  define PATH_SEPARATOR_STR		";"
+#endif
+#ifndef DIR_SEPARATOR_CHAR
+   /* Assume that not having this is an indicator that all
+      are missing. */
+#  define DIR_SEPARATOR_CHAR		'/'
+#  define DIR_SEPARATOR_STR		"/"
+#  define PATH_SEPARATOR_CHAR		':'
+#  define PATH_SEPARATOR_STR		":"
+#endif /* !DIR_SEPARATOR_CHAR */
+\end{Verbatim}
+
+With this in place we can use the macros defined above to write code which will compile and work just about anywhere:
+
+\begin{verbatim}
+char path[MAXBUFLEN];
+snprintf(path, MAXBUFLEN, "%ctmp%c%s\n",
+         DIR_SEPARATOR_CHAR, DIR_SEPARATOR_CHAR, foo);
+file = fopen(path, "tw+");
+\end{verbatim}
+
+\subsection{Executable Filename Extensions}
+
+As I already noted in 25.5 Package Installation, the fact that Windows requires that all program files be named with the extension `.exe', is the cause of several inconsistencies in package behaviour between Windows and Unix.
+
+For example, where Libtool is involved, if a package builds an executable which is linked against an as yet uninstalled library, libtool puts the real executable in the `.libs' (or `\_{}libs') subdirectory, and writes a shell script to the original destination of the executable(64), which ensures the runtime library search paths are adjusted to find the correct (uninstalled) libraries that it depends upon. On Windows, only a PE-COFF executable is allowed to bear the .exe extension, so the wrapper script has to be named differently to the executable it is substituted for (i.e the script is only executed correctly by the operating system if it does not have an `.exe' extension). The result of this confusion is that the `Makefile' can't see some of the executables it builds with Libtool because the generated rules assume an `.exe' extension will be in evidence. This problem will be addressed in some future revision of Automake and Libtool. In the mean time, it is sometimes necessary to move the executables from the `.libs' directory to their install destination by hand. The continual rebuilding of wrapped executables at each invocation of make is another symptom of using wrapper scripts with a different name to the executable which they represent.
+
+It is very important to correctly add the `.exe' extension to program file 
+names in your `Makefile.am', otherwise many of the generated rules will not 
+work correctly while they await a file without the `.exe' extension.
+Fortunately, Automake will do this for you where ever it is able to tell that 
+a file is a program -- everything listed in `bin\_{}PROGRAMS' for example.
+Occasionaly you will find cases where there is no way for Automake to be sure 
+of this, in which case you must be sure to add the `\$(EXEEXT)' suffix. By 
+structuring your `Makefile.am' carefully, this can be avoided in the majority 
+of cases: 
+
+\begin{Verbatim}[frame=single]
+TESTS = $(check_SCRIPTS) script-test bin1-test$(EXEEXT)
+\end{Verbatim}
+
+could be rewritten as:
+
+\begin{Verbatim}[frame=single]
+check_PROGRAMS = bin1-test
+TESTS = $(check_SCRIPTS) script-test $(check_PROGRAMS)
+\end{Verbatim}
+
+The value of `EXEEXT' is always set correctly with respect to the host machine if you use Libtool in your project. If you don't use Libtool, you must manually call the Autoconf macro, `AC\_{}EXEEXT' in your `configure.in' to make sure that it is initialiesed correctly. If you don't call this macro (either directly or implicity with `AC\_{}PROG\_{}LIBTOOL'), your project will almost certainly not build correctly on Cygwin.
+
+\section{DLLs with Libtool}
+
+Windows' DLLs, are very different to their nearest equivalent on Unix: shared libraries. This makes Libtool's job of hiding both behind the same abstraction extremely difficult -- it is not fully implemented at the time of writing. As a package author that wants to use DLLs on Windows with Libtool, you must construct your packages very carefully to enable them to build and link with DLLs in the same way that they build and link with shared libraries on Unix.
+
+Some of the difficulties that must be addressed follow: 
+
+\begin{itemize}
+\item At link time, a DLL effectively consists of two parts; the DLL itself which contains the shared object code, and an import library which consists of the stub(65) functions which are actually linked into the executable, at a rate of one stub per entry point. Unix has a run time loader which links shared libraries into the main program as it is executed, so the shared library is but a single file.
+
+\item Pointer comparisons do not always work as expected when the pointers cross a DLL boundary, since you can be comparing the addresses of the stubs in the import library rather than the addresses of the actual objects in the DLL. GCC provides the \_{}\_{}declspec extension to alleviate this problem a little.
+
+\item The search algorithm for the runtime library loader is very different to the algorithms typically used on Unix; I'll explain how to dela with this in 25.4.5 Runtime Loading of DLLs.
+
+\item All of the symbols required by a DLL at runtime, must be resolved at link time. With some creative use of import libraries, it is usually possible to work around this shortcoming, but it is easy to forget this limitation if you are developing on a modern system which has lazy symbol resolution. Be sure to keep it at the back of your mind if you intend to have your package portable to Windows.
+
+\item Worst of all, is that it is impossible to reference a non-pointer item imported from a DLL. In practice, when you think you have exported a data item from a DLL, you are actually exporting it's address (in fact the address of the address if you take the import library into consideration), and it is necessary to add an extra level of indirection to any non-pointers imported from a DLL to take this into account. The GNU gcc \_{}\_{}declspec extension can handle this automatically too, at the expense of obfuscating your code a little.
+\end{itemize}
+
+Cygwin support in Libtool is very new, and is being developed very quickly, so newer versions generally improve vastly over their predecessors when it comes to Cygwin, so you should get the newest release you can. The rest of this section is correct with respect to Libtool version 1.3.5.
+
+In some future version, Libtool might be able to work as transparently as Autoconf and Automake, but for now designing your packages as described in this chapter will help Libtool to help us have DLLs and Unix shared libraries from the same codebase.
+
+The bottom line here is that setting a package up to build and use modules and libraries as both DLLs and Unix shared libraries is not straightforward, but the rest of this section provides a recipe which I have used successfully in several projects, including the module loader for GNU m4 1.5 which works correctly with DLLs on Windows. Lets create hello world as a DLL, and an executable where the runtime loader loads the DLL. 
+
+\subsection{DLL Support with GNU Autotools}
+
+Here are the contents of the three source files used as an example for the remainder of this chapter (for brevity, they are missing most of the special code one would normally use to maximise portability):
+
+`hello.h' documents the interface to `libhello.dll':
+
+\begin{Verbatim}[frame=single]
+#ifndef HELLO_H
+#define HELLO_H 1
+
+extern int hello (const char *who);
+
+#endif /* !HELLO_H */
+\end{Verbatim}
+
+`hello.c' is the implementation of `libhello.dll':
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include <stdio.h>
+
+#include "hello.h"
+
+int hello (const char *who)
+{
+ printf("Hello, %s!\n", who);
+ return 0;
+}
+\end{Verbatim}
+
+`main.c' is the source for the executable which uses `libhello.dll':
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include "hello.h"
+
+int main (int argc, const char *const argv[])
+{
+ return hello("World");
+}
+\end{Verbatim}
+
+\subsection{A Makefile.am for DLLs}
+
+First of all we will autoconfiscate(66) the source files above with a minimal setup:
+
+`Makefile.am' is used to generate the `Makefile.in' template for the `configure' script:
+
+\begin{Verbatim}[frame=single]
+## Process this file with automake to produce Makefile.in.
+
+lib_LTLIBRARIES		= libhello.la
+libhello_la_SOURCES     = hello.c
+libhello_la_LDFLAGS     = -no-undefined -version-info 0:0:0
+
+include_HEADERS         = hello.h
+
+bin_PROGRAMS            = hello
+hello_SOURCES           = main.c
+hello_LDADD             = libhello.la
+\end{Verbatim}
+
+The new feature introduced in this file is the use of the `-no-undefined' flag 
+in the libhello\_{}la\_{}LDFLAGS value. This flag is required for Windows 
+DLL builds. It asserts to the linker that there are no undefined symbols 
+in the `libhello.la' target, which is one of the requirements for building 
+a DLL outlined earlier. See 
+subsection \ref{SS_Creating_Libtool_Libraries_with_Automake}
+Creating Libtool Libraries with Automake,
+page \pageref{SS_Creating_Libtool_Libraries_with_Automake}.
+
+For an explanation of the contents of the rest of this `Makefile.am',
+See chapter \ref{C_Introducing_GNU_Automake} Introducing GNU automake,
+page \pageref{C_Introducing_GNU_Automake}. 
+
+\subsection{A configure.in for DLLs}
+
+`configure.in' is used to generate the `configure' script:
+
+\begin{Verbatim}[frame=single]
+# Process this file with autoconf to create configure.
+
+AC_INIT(hello.h)
+AM_CONFIG_HEADER(config.h:config.hin)
+AM_INIT_AUTOMAKE(hello, 1.0)
+
+AC_PROG_CC
+AM_PROG_CC_STDC
+AC_C_CONST
+AM_PROG_LIBTOOL
+
+AC_OUTPUT(Makefile)
+\end{Verbatim}
+
+The `AC\_{}PROG\_{}CC' and `AM\_{}PROG\_{}CC\_{}STDC' macros in 
+the `configure.in' above will conspire to find a suitable compiler 
+for the C code in this example, and to discover any extra switches 
+required to put that compiler into an ANSI mode. I have used 
+the const keyword in the sources, so I need to specify 
+the `AC\_{}C\_{}CONST' macro, in case the compiler doesn't 
+understand it, and finally I have specified the `AM\_{}PROG\_{}LIBTOOL' macro 
+since I want the library to be built with Libtool.
+
+In order to set the build environment up we need to create the autogenerated files: 
+
+\begin{verbatim}
+$ ls
+Makefile.in    hello.c   main.c
+configure.in   hello.h
+$ aclocal
+$ autoheader
+$ libtoolize --force --copy
+$ automake --foreign --add-missing --copy
+automake: configure.in: installing ./install-sh
+automake: configure.in: installing ./mkinstalldirs
+automake: configure.in: installing ./missing
+$ autoconf
+$ ls
+Makefile.am  config.hin   hello.c     ltmain.sh     stamp-h.in
+Makefile.in  config.sub   hello.h     main.c
+aclocal.m4   configure    install-sh  missing
+config.guess configure.in ltconfig    mkinstalldirs
+\end{verbatim}
+
+If you have already tried to build DLLs with Libtool, you have probably noticed that the first point of failure is during the configuration process. For example, running the new configure script you might see:
+
+\begin{verbatim}
+...
+checking if libtool supports shared libraries... yes
+checking if package supports dlls... no
+checking whether to build shared libraries... no
+...
+\end{verbatim}
+
+libtool provides a macro, `AC\_{}LIBTOOL\_{}WIN32\_{}DLL', which must be added to a package's `configure.in' to communicate to the libtool machinery that the package supports DLLs. Without this macro, libtool will never try to build a DLL on Windows. Add this macro to `configure.in' before the `AM\_{}PROG\_{}LIBTOOL' macro, and try again:
+
+\begin{verbatim}
+$ make
+cd . && aclocal
+cd . && automake --foreign Makefile
+cd . && autoconf
+...
+checking if libtool supports shared libraries... yes
+checking if package supports dlls... yes
+checking whether to build shared libraries... yes
+...
+gcc -DHAVE_CONFIG_H -I. -I. -I. -g -O2 -Wp,-MD,.deps/hello.pp \
+-c  -DDLL_EXPORT -DPIC hello.c -o .libs/hello.lo
+gcc -DHAVE_CONFIG_H -I. -I. -I. -g -O2 -Wp,-MD,.deps/hello.pp \
+-c hello.c -o hello.o >/dev/null 2>&1
+mv -f .libs/hello.lo hello.lo
+...
+gcc -g -O2 -o ./libs/hello main.o .libs/libimp-hello-0-0-0.a \
+-Wl,--rpath -Wl,/usr/local/lib
+creating hello
+...
+$ ./hello
+Hello, World!
+\end{verbatim}
+
+If you run this and watch the full output of the `make' command, Libtool uses a rather contorted method of building DLLs, with several invocations each of dlltool and gcc. I have omitted these from the example above, since they really are very ugly, and in any case are almost incomprehensible to most people. To see it all in its full horror you can always examine the output after running the commands yourself! In a future release of Cygwin, recent work on the binutils linker by DJ Delorie, will allow gcc to link DLLs in a single pass using the same syntax used on other systems to produce shared libraries. Libtool will adopt this method when it becomes available, deprecating the use of dlltool.
+
+I have extracted the interesting lines from amongst the many calls to dlltool(67) and gcc generated by make in the shell log. The main thing to notice is that we have a `hello' binary, which is executable, and which gives the right result when we run it! From the partial log above, it certainly appears that it has built `libhello' as a DLL and linked that into `hello', but just to double check we can use ldd(68): 
+
+\begin{verbatim}
+$ libtool --mode=execute ldd ./hello
+lt-hello.exe    -> /tmp/.libs/lt-hello.exe
+libhello-0-0-0.dll      -> /tmp/.libs/libhello-0-0-0.dll
+cygwin1.dll     -> /usr/bin/cygwin1.dll
+kernel32.dll    -> /WINNT/system32/kernel32.dll
+ntdll.dll       -> /WINNT/system32/ntdll.dll
+advapi32.dll    -> /WINNT/system32/advapi32.dll
+user32.dll      -> /WINNT/system32/user32.dll
+gdi32.dll       -> /WINNT/system32/gdi32.dll
+rpcrt4.dll      -> /WINNT/system32/rpcrt4.dll
+\end{verbatim}
+
+So now you know how to build and link a simple Windows DLL using GNU 
+Autotools: You add `-no-undefined' to the Libtool library `LDFLAGS', and 
+include the `AC\_{}LIBTOOL\_{}WIN32\_{}DLL' macro in your `configure.in'.
+
+\subsection{Handling Data Exports from DLLs}
+
+Unfortunately, things are not quite that simple in reality, except in the rare cases where no data symbols are exported across a DLL boundary. If you look back at the example in A configure.in for DLLs, you will notice that the Libtool object, `hello.lo' was built with the preprocessor macro `DLL\_{}EXPORT' defined. Libtool does this deliberately so that it is possible to distinguish between a static object build and a Libtool object build, from within the source code.
+
+Lets add a data export to the DLL source to illustrate:
+
+The `hello.h' header must be changed quite significantly:
+
+
+\begin{Verbatim}[frame=single]
+#ifndef HELLO_H
+#define HELLO_H 1
+
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#ifdef _WIN32
+#  ifdef DLL_EXPORT
+#    define HELLO_SCOPE         __declspec(dllexport)
+#  else
+#    ifdef LIBHELLO_DLL_IMPORT
+#      define HELLO_SCOPE       extern __declspec(dllimport)
+#    endif
+#  endif
+#endif
+#ifndef HELLO_SCOPE
+#  define HELLO_SCOPE           extern
+#endif
+
+HELLO_SCOPE const char *greet; 
+extern int hello (const char *who);
+
+#endif /* !HELLO_H */
+\end{Verbatim}
+
+The nasty block of preprocessor would need to be shared among all the source files which comprise the `libhello.la' Libtool library, which in this example is just `hello.c'. It needs to take care of five different cases:
+
+\begin{description}
+\item[compiling] `hello.lo'
+
+    When compiling the Libtool object which will be included in the DLL, we need to tell the compiler which symbols are exported data so that it can do the automatic extra dereference required to refer to that data from a program which uses this DLL. We need to flag the data with \_{}\_{}declspec(dllexport), See section 25.4 DLLs with Libtool.
+
+\item[compilation] unit which will link with `libhello-0-0-0.dll'
+
+    When compiling an object which will import data from the DLL, again we need to tell the compiler so that it can perform the extra dereference, except this time we use extern \_{}\_{}declspec(dllimport). From the preprocessor block, you will see that we need to define `LIBHELLO\_{}DLL\_{}IMPORT' to get this define, which I will describe shortly.
+
+\item[compiling] `hello.o'
+
+    When compiling the object for inclusion in the static archive, we must be careful to hide the \_{}\_{}declspec() declarations from the compiler, or else it will start dereferencing variables for us by mistake at runtime, and in all likelihood cause a segmentation fault. In this case we want the compiler to see a simple extern declaration.
+
+\item[compilation] unit which will link with `libhello.a'
+
+    Similarly, an object which references a data symbol which will be statically linked into the final binary from a static archive must not see any of the \_{}\_{}declspec() code, and requires a simple extern.
+
+\item[non Windows host]
+\
+
+    It seems obvious, but we must also be careful not to contaminate the code when it is compiled on a machine which doesn't need to jump through the DLL hoops.
+\end{description}
+
+The changes to `hello.c' are no different to what would be required on a Unix machine. I have declared the greet variable to allow the caller to override the default greeting:
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include <stdio.h>
+
+#include "hello.h"
+
+const char *greet = "Hello";
+
+int hello (const char *who)
+{
+ printf("%s, %s!\n", greet, who);
+ return 0;
+}
+\end{Verbatim}
+
+Again, since the DLL specific changes have been encapsulated in the `hello.h' file, enhancements to `main.c' are unsurprising too:
+
+ 	
+
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include "hello.h"
+
+int main (int argc, const char *const argv[])
+{
+ if (argc > 1)
+ {
+  greet = argv[1];
+ }
+ return hello("World");
+}
+\end{Verbatim}
+
+The final thing to be aware of is to be careful about ensuring that `LIBHELLO\_{}DLL\_{}IMPORT' is defined when we link an executable against the `libhello' DLL, but not defined if we link it against the static archive. It is impossible to automate this completely, particularly when the executable in question is from another package and is using the installed `hello.h' header. In that case it is the responsibility of the author of that package to probe the system with configure to decide whether it will be linking with the DLL or the static archive, and defining `LIBHELLO\_{}DLL\_{}IMPORT' as appropriate.
+
+Things are a little simpler when everything is under the control of a single 
+package, but even then it isn't quite possible to tell for sure whether 
+Libtool is going to build a DLL or only a static library. For example, if 
+some dependencies are dropped for being static, Libtool may 
+disregard `-no-undefined'
+(see subsection \ref{SS_Creating_Libtool_Libraries_with_Automake}
+Creating Libtool Libraries with Automake,
+page \pageref{SS_Creating_Libtool_Libraries_with_Automake}).
+One possible solution is: 
+
+\begin{enumerate}
+\item Define a function in the library that invokes `return 1' from a DLL.
+Fortunately that's easy to accomplish thanks to `-DDLL\_{}EXPORT', in this 
+case, by adding the following to `hello.c':
+
+ 	
+
+\begin{Verbatim}[frame=single]
+#if defined WIN32 && defined DLL_EXPORT
+char
+libhello_is_dll (void)
+{
+  return 1;
+}
+#endif /* WIN32 && DLL_EXPORT */
+\end{Verbatim}
+
+\item Link a program with the library, and check whether it is a DLL by seeing if the link succeeded.
+
+\item To get cross builds to work, you must, in the same vein, test whether linking a program which calls `libhello\_{}is\_{}dll' succeeds to tell whether or not to define `LIBHELLO\_{}DLL\_{}IMPORT'.
+\end{enumerate}
+
+As an example of building the `hello' binary we can add the following code to `configure.in', just before the call to `AC\_{}OUTPUT':
+
+\begin{verbatim}
+# ----------------------------------------------------------------------
+# Win32 objects need to tell the header whether they will be linking
+# with a dll or static archive in order that everything is imported
+# to the object in the same way that it was exported from the
+# archive (extern for static, __declspec(dllimport) for dlls)
+# ----------------------------------------------------------------------
+LIBHELLO_DLL_IMPORT=
+case "$host" in
+*-*-cygwin* | *-*-mingw* )
+ if test X"$enable_shared" = Xyes; then
+  AC_TRY_LINK_FUNC([libhello_is_dll],
+    [LIBHELLO_DLL_IMPORT=-DLIBHELLO_DLL_IMPORT])
+ fi
+ ;;
+esac
+AC_SUBST(LIBHELLO_DLL_IMPORT)
+\end{verbatim}
+
+And we must also arrange for the flag to be passed while compiling any objects which will end up in a binary which links with the dll. For this simple example, only `main.c' is affected, and we can add the following rule to the end of `Makefile.am':
+
+\begin{verbatim}
+main.o: main.c
+        $(COMPILE) @LIBHELLO_DLL_IMPORT@ -c main.c
+\end{verbatim}
+
+In a more realistic project, there would probably be dozens of files involved, in which case it would probably be easier to move them all to a separate subdirectory, and give them a `Makefile.am' of their own which could include:
+
+\begin{verbatim}
+CPPFLAGS        = @LIBHELLO_DLL_IMPORT@
+\end{verbatim}
+
+Now, lets put all this into practice, and check that it works:
+
+\begin{Verbatim}[frame=single]
+$ make
+cd . && aclocal
+cd . && automake --foreign Makefile
+cd . && autoconf
+...
+checking for gcc option to produce PIC ... -DDLL_EXPORT
+checking if gcc PIC flag  -DDLL_EXPORT works... yes
+...
+checking whether to build shared libraries... yes
+...
+gcc -DHAVE_CONFIG_H -I. -I. -I. -g -O2 \
+ -Wp,-MD,.deps/hello.pp -c  -DDLL_EXPORT \
+ -DPIC hello.c -o .libs/hello.lo
+gcc -DHAVE_CONFIG_H -I. -I. -I. -g -O2 \
+ -Wp,-MD,.deps/hello.pp -c hello.c \
+ -o hello.o >/dev/null 2>&1
+...
+gcc -DHAVE_CONFIG_H -I. -I. -I. -g \
+-O2 -DLIBHELLO_DLL_IMPORT -c main.c
+...
+gcc -g -O2 -o ./libs/hello main.o .libs/libimp-hello-0-0-0.a \
+-Wl,--rpath -Wl,/usr/local/lib
+creating hello
+...
+$ ./hello
+Hello, World!
+$ ./hello Howdy
+Howdy, World!
+\end{Verbatim}
+
+The recipe also works if I use only the static archives:
+
+\begin{Verbatim}[frame=single]
+$ make clean
+...
+$ ./configure --disable-shared
+...
+checking whether to build shared libraries... no
+...
+$ make
+...
+gcc -DHAVE_CONFIG_H -I. -I. -I. -f -O2 \
+-Wp,-MD,.deps/hello.pp -c hello.c -o hello.o
+...
+ar cru ./libs/libhello.a  hello.o
+...
+gcc -DHAVE_CONFIG_H -I. -I. -I.  -g -O2 -c main.c
+...
+gcc -g -O2 -o hello main.o ./.libs/libhello.a
+$ ./hello
+Hello, World!
+$ ./hello "G'Day"
+G'day, World!
+\end{Verbatim}
+
+And just to be certain that I am really testing a new statically linked executable:
+
+\begin{verbatim}
+$ ldd ./hello
+hello.exe       -> /tmp/hello.exe
+cygwin1.dll     -> /usr/bin/cygwin1.dll
+kernel32.dll    -> /WINNT/system32/kernel32.dll
+ntdll.dll       -> /WINNT/system32/ntdll.dll
+advapi32.dll    -> /WINNT/system32/advapi32.dll
+user32.dll      -> /WINNT/system32/user32.dll
+gdi32.dll       -> /WINNT/system32/gdi32.dll
+rpcrt4.dll      -> /WINNT/system32/rpcrt4.dll
+\end{verbatim}
+
+\subsection{Runtime Loading of DLLs}
+
+DLLs built using the recipe described in this chapter can be loaded at runtime in at least three different ways:
+
+\begin{itemize}
+    \item Using the Cygwin emulation of the POSIX dlopen/dlclose/dlsym API. Note however that the emulation is broken up until at least version b20.1, and dlopen(NULL) doesn't work at all.
+
+    \item Using the Windows LoadLibrary/FreeLibrary/GetProcAddress API.
+
+    \item Using libltdl, which is covered in more detail in Using GNU libltdl. 
+\end{itemize}
+
+\section{Package Installation}
+
+Having successfully built a GNU Autotools managed package, a Systems Administrator will typically want to install the binaries, libraries and headers of the package. The GNU standards dictate that this be done with the command make install, and indeed Automake always generates `Makefile's which work in this way.
+
+Unfortunately, this make install command is often thwarted by the peculiarities of Window's file system, and after an apparently successful installation, often the Windows installation conventions are not always satisfied, so the installed package may not work, even though the uninstalled build is fully operational.
+
+There are a couple of issues which are worthy of discussion:
+
+Prior to release 1.1.0, the Cygwin install program did not understand 
+the .exe file extension. Fixing it was only a matter of writing a shell 
+script wrapper for the install binary. Even though the current release is 
+well behaved in this respect, .exe handling is still the cause of some 
+complications. See section 25.3.3 Executable Filename Extensions. If a 
+package builds any DLLs with libtool, they are installed 
+to \$prefix/lib by default, since this is where shared libraries would be 
+installed on Unix. Windows searches for DLLs at runtime using the user's 
+executable search path (\$PATH), which generally doesn't contain 
+library paths. The first evidence you will see of this problem is 
+when DLLs you have installed are not found by executables which depend on 
+them, and there are two ways to fix it: The installed DLLs can be 
+moved by hand from their installation directory into the equivalent 
+executable destination, say from `/usr/local/lib' to `/usr/local/bin';
+or better, you can extend your binary search path to include library 
+directories. Adding the following to your `.profile' would be a good start:
+
+ 	
+\begin{verbatim}
+PATH=$PATH:/usr/local/lib:/usr/lib:/lib
+\end{verbatim}
+
+Once you are comfortable with setting your packages up like this, they will be relatively well behaved on Windows and Unix. Of course, you must also write portable code, see Writing Portable C with GNU Autotools. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

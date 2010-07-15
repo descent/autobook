@@ -1,0 +1,239 @@
+\chapter{Migrating an Existing Package to GNU Autotools}
+
+Sometimes you have to take an existing package and wrap it in an Autoconf framework. This is called autoconfiscating (54) a package.
+
+This chapter gives an overview of various approach that have been taken when autoconfiscating, explains some important points through examples, and discusses some of potential pitfalls. It is not an exhaustive guide to autoconfiscation, as this process is much more art than it is science. 
+
+\section{Why autconfiscate}
+
+There are a few reasons to autoconfiscate a package. You might be porting your package to a new platform for the first time, or your might have outstripped the capabilities of an ad hoc system. Or, you might be assuming maintenance of a package and you want to make it fit in with other packages that use the GNU Autotools.
+
+For instance, for libgcj, we wanted to distribute some libraries needed for proper operation, such as the zip archiving program and the Boehm garbage collector. In neither case was an autoconf framework available. However, we felt one was required in order to give the overall package a seamless and easy-to-use configuration and build system. This attention to ease of install by users is important; it is one reason that the GNU Autotools were written.
+
+In another case, a group I worked with was taking over maintenance of a preexisting package. We preferred an Autoconf-based solution to the home-grown one already in use by the package -- the existing system was based on platform tests, not feature tests, and was difficult to navigate and extend. 
+
+\section{Overview of the Two Approaches}
+
+The two fundamental approaches to autoconfiscation, which we call `quick and dirty', and `the full pull'. In practice each project is a mix of the two.
+
+There are no hard-and-fast rules when autoconficating an existing package, particularly when you are planning to track future releases of the original source. However, since Autoconf is so flexible, it is usually possible to find some reasonable way to implement whatever is required. Automake isn't as flexible, and with `strangely' constructed packages you're sometimes required to make a difficult choice: restructure the package, or avoid automake. 
+
+\begin{enumerate}
+\item Quick And Dirty.
+
+In the quick and dirty approach, the goal is to get the framework up and running with the least effort. This is the approach we took when we autoconficated both zip and the Boehm garbage collector. Our reasons were simple: we knew we would be tracking the original packages closely, so we wanted to minimize the amount of work involved in importing the next release and subsequently merging in our changes. Also, both packages were written to be portable (but in very different ways), so major modifications to the source were not required.
+
+\item The Full Pull.
+
+Sometimes you'd rather completely convert a package to GNU Autotools. For instance, you might have just assumed maintenance of a package. Or, you might read this book and decide that your company's internal projects should use a state-of-the-art configuration system.
+
+The full pull is more work than the quick-and-dirty approach, but in the end it yields a more easily understood, and more idiomatic package. This in turn has maintenance benefits due to the relative absence of quirks, traps, and special cases -- oddities which creep into quick and dirty ports due to the need, in that case, to structure the build system around the package instead of having the ability to restructure the package to fit the build system. 
+\end{enumerate}
+
+\section{Example: Quick And Dirty}
+
+As part of the libgcj project (55), I had to incorporate the zip program into our source tree. Since this particular program is only used in one part of the build, and since this program was already fairly portable, I decided to take a quick-and-dirty approach to autoconfiscation.
+
+First I read through the `README' and `install.doc' files to see how zip is ordinarily built. From there I learned that zip came with a `Makefile' used to build all Unix ports (and, for the initial autoconfiscation, Unix was all I was interested in), so I read that. This file indicated that zip had few configurability options.
+
+Running ifnames on the sources, both Unix and generic, confirmed that the 
+zip sources were mostly self-configuring, using system-specific `\#defines' ---
+a practice which we recommend against; however for a quicky-and-dirty port 
+it is not worth cleaning up: 
+
+\begin{Verbatim}[frame=single]
+$ ifnames *.[ch] unix/*.[ch] | grep ^__ | head
+__386BSD__ unix/unix.c
+__CYGWIN32__ unix/osdep.h
+__CYGWIN__ unix/osdep.h
+__DATE__ unix/unix.c zipcloak.c zipnote.c zipsplit.c
+__DEBUG_ALLOC__ zip.c
+__ELF__ unix/unix.c
+__EMX__ fileio.c ttyio.h util.c zip.c
+__FreeBSD__ unix/unix.c
+__G ttyio.h
+__GNUC__ unix/unix.c zipcloak.c zipnote.c zipsplit.c
+\end{Verbatim}
+
+Based on this information I wrote my initial `configure.in', which is the one still in use today:
+
+\begin{Verbatim}[frame=single]
+AC_INIT(ziperr.h)
+AM_INIT_AUTOMAKE(zip, 2.1)
+AM_MAINTAINER_MODE
+
+AC_PROG_CC
+
+AC_HEADER_DIRENT
+AC_DEFINE(UNIX)
+
+AC_LINK_FILES(unix/unix.c, unix.c)
+
+AC_OUTPUT(Makefile)
+\end{Verbatim}
+
+The one mysterious part of this `configure.in' is the define of the `UNIX' preprocessor macro. This define came directly from zip's `unix/Makefile' file; zip uses this define to enable certain Unix-specific pieces of code.
+
+In this particular situation, I lucked out. zip was unusually easy to autoconficate. Typically more actual checks are required in `configure.in', and more than a single iteration is required to get a workable configuration system.
+
+From `unix/Makefile' I also learned which files were expected to be built in order to produce the zip executable. This information let me write my `Makefile.am': 
+
+\begin{Verbatim}[frame=single]
+## Process this file with automake to create Makefile.in.
+
+## NOTE: this file doesn't really try to be complete.
+## In particular `make dist' won't work at all.
+## We're just aiming to get the program built.
+## We also don't bother trying to assemble code,
+## or anything like that.
+
+AUTOMAKE_OPTIONS = no-dependencies
+
+INCLUDES = -I$(srcdir)/unix
+
+bin_PROGRAMS = zip
+
+zip_SOURCES = zip.c zipfile.c zipup.c fileio.c util.c \
+    globals.c crypt.c ttyio.c unix.c crc32.c crctab.c \
+    deflate.c trees.c bits.c
+
+## This isn't really correct, but we don't care.
+$(zip_OBJECTS) : zip.h ziperr.h tailor.h unix/osdep.h \
+              crypt.h revision.h ttyio.h unix/zipup.h
+\end{Verbatim}
+
+This file provides a good look at some of the tradeoffs involved. In my case, I didn't care about full correctness of the resulting `Makefile.am' -- I wasn't planning to maintain the project, I just wanted it to build in my particular set of environments.
+
+So, I sacrificed `dist' capability to make my work easier. Also, I decided to disable dependency tracking and instead make all the resulting object files depend on all the headers in the project. This approach is inefficient, but in my situation perfectly reasonable, as I wasn't planning to do any actual development on this package -- I was simply looking to make it build so that it could be used to build the parts of the package I was actually hacking. 
+
+\section{Example: The Full Pull}
+
+Suppose instead that I wanted to fully autoconfiscate zip. Let's ignore for 
+now that zip can build on systems to which the GNU Autotools have not been 
+ported, like TOPS-20---perhaps a big problem back in the real world.
+
+The first step should always be to run autoscan. autoscan is a program which examines your source code and then generates a file called `configure.scan' which can be used as a rough draft of a `configure.in'. autoscan isn't perfect, and in fact in some situations can generate a `configure.scan' which autoconf won't directly accept, so you should examine this file by hand before renaming it to `configure.in'.
+
+autoscan doesn't take into account macro names used by your program. For 
+instance, if autoscan decides to generate a check for `$<$fcntl.h$>$', it 
+will just generate ordinary autoconf code which in turn might 
+define `HAVE\_{}FCNTL\_{}H' at configure time. This just means that 
+autoscan isn't a panacea -- you will probably have to modify your source 
+to take advantage of the code that autoscan generates.
+
+Here is the `configure.scan' I get when I run autoscan on zip:
+
+\begin{Verbatim}[frame=single]
+dnl Process this file with autoconf to produce a configure \
+    script.
+AC_INIT(bits.c)
+
+dnl Checks for programs.
+AC_PROG_AWK
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+
+dnl Checks for libraries.
+dnl Replace `main' with a function in -lx:
+AC_CHECK_LIB(x, main)
+
+dnl Checks for header files.
+AC_HEADER_DIRENT
+AC_HEADER_STDC
+AC_CHECK_HEADERS(fcntl.h malloc.h sgtty.h strings.h \
+sys/ioctl.h termio.h unistd.h)
+
+dnl Checks for typedefs, structures, and compiler \
+    characteristics.
+AC_C_CONST
+AC_TYPE_SIZE_T
+AC_STRUCT_ST_BLKSIZE
+AC_STRUCT_ST_BLOCKS
+AC_STRUCT_ST_RDEV
+AC_STRUCT_TM
+
+dnl Checks for library functions.
+AC_PROG_GCC_TRADITIONAL
+AC_FUNC_MEMCMP
+AC_FUNC_MMAP
+AC_FUNC_SETVBUF_REVERSED
+AC_TYPE_SIGNAL
+AC_FUNC_UTIME_NULL
+AC_CHECK_FUNCS(getcwd mktime regcomp rmdir strstr)
+
+AC_OUTPUT(acorn/makefile unix/Makefile Makefile atari/Makefile)
+\end{Verbatim}
+
+As you can see, this isn't suitable for immediate use as `configure.in'. For instance, it generates several `Makefile's which we know we won't need. At this point there are two things to do in order to fix this file.
+
+First, we must fix outright flaws in `configure.scan', add checks for libraries, and the like. For instance, we might also add code to see if we are building on Windows and set a variable appropriately: 
+
+\begin{Verbatim}[frame=single]
+AC_CANONICAL_HOST
+case "$target" in
+  *-cygwin* | *-mingw*)
+    INCLUDES='-I$(srcdir)/win32'
+    ;;
+  *)
+    # Assume Unix.
+    INCLUDES='-I$(srcdir)/unix'
+    ;;
+esac
+AC_SUBST(INCLUDES)
+\end{Verbatim}
+
+Second, we must make sure that the zip sources use the results we compute. So, for instance, we would check the zip source to see if we should use `HAVE\_{}MMAP', which is the result of calling AC\_{}FUNC\_{}MMAP.
+
+At this point you might also consider using a configuration header such 
+as is generated by AC\_{}CONFIG\_{}HEADER. Typically this involves 
+editing all your source files to include the header, but in the long run 
+this is probably a cleaner way to go than using many -D options on the 
+command line. If you are making major source changes in order to fully 
+adapt your code to autoconf's output, adding a `\#include' to each file will 
+not be difficult.
+
+This step can be quite difficult if done thoroughly, as it can involve radical changes to the source. After this you will have a minimal but functional `configure.in' and a knowledge of what portability information your program has already incorporated.
+
+Next, you want to write your `Makefile.am's. This might involve restructuring your package so that it can more easily conform to what Automake expects. This work might also involve source code changes if the program makes assumptions about the layout of the install tree -- these assumptions might very well break if you follow the GNU rules about the install layout.
+
+At the same time as you are writing your `Makefile.am's, you might consider libtoolizing your package. This makes sense if you want to export shared libraries, or if you have libraries which several executables in your package use.
+
+In our example, since there is no library involed, we won't use Libtool. The `Makefile.am' used in the minimal example is nearly sufficient for our use, but not quite. Here's how we change it to add dependency tracking and dist support: 
+
+\begin{Verbatim}[frame=single]
+## Process this file with automake to create Makefile.in.
+
+bin_PROGRAMS = zip
+
+if UNIX
+bin_SCRIPTS = unix/zipgrep
+os_sources = unix/unix.c
+else
+os_sources = win32/win32.c win32zip.c
+endif
+zip_SOURCES = zip.c zipfile.c zipup.c fileio.c util.c \
+	      globals.c crypt.c ttyio.c crc32.c crctab.c \
+	      deflate.c trees.c bits.c $(os_sources)
+
+## It was easier to just list all the source files than to 
+## pick out the non-source files.
+EXTRA_DIST = algorith.doc README TODO Where crc_i386.S \
+bits.c crc32.c acorn/RunMe1st acorn/ReadMe acorn/acornzip.c \
+acorn/makefile acorn/match.s acorn/osdep.h acorn/riscos.c \
+acorn/riscos.h acorn/sendbits.s acorn/swiven.h \
+acorn/swiven.s acorn/zipup.h crctab.c crypt.c crypt.h \
+deflate.c ebcdic.h fileio.c globals.c history \
+...
+wizdll/wizdll.def wizdll/wizmain.c wizdll/wizzip.h \
+wizdll/zipdll16.mak wizdll/zipdll32.mak
+\end{Verbatim}
+
+The extremely long `EXTRA\_{}DIST' macro above has be truncated for brevity, denoted by the `...' line.
+
+Note that we no longer define INCLUDES -- it is now automatically defined by configure. Note also that, due to a small technicality, this `Makefile.am' won't really work with Automake 1.4. Instead, we must modify things so that we don't try to compile `unix/unix.c' or other files from subdirectories. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

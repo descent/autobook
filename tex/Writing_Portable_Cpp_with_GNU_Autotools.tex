@@ -1,0 +1,608 @@
+\chapter{Writing Portable C++ with GNU Autotools}\label{Writing_Portable_CPP_with_GNU_Autotools}
+
+My first task in industry was to port a large C++ application from one Unix platform to another. My colleagues immediately offered their sympathies and I remember my initial reaction--`what's the big deal?'. After all, this application used the C++ standard library, a modest subset of common Unix system calls and C++ was approaching ISO standardization. Little did I know what lay ahead--endless hurdles imposed by differences to C++ implementations in use on those platforms.
+
+Being essentially a superset of the C programming language, C++ suffers from all of the machine-level portability issues described in 15. Writing Portable C with GNU Autotools. In addition to this, variability in the language and standard libraries present additional trouble when writing portable C++ programs.
+
+There have been comprehensive guides written on C++ portability (see section 16.5 Further Reading). This chapter will attempt to draw attention to the less portable areas of the C++ language and describe how the GNU Autotools can help you overcome these (see section 16.4 How GNU Autotools Can Help). In many instances, the best approach to multi-platform C++ portability is to simply re-express your programs using more widely supported language constructs. Fortunately, this book has been written at a time when the C++ language standard has been ratified and C++ implementations are rapidly conforming. Gladly, as time goes on the necessity for this chapter will diminish. 
+
+\section{Brief History of C++}
+
+C++ was developed in 1983 by Bjarne Stroustrup at AT\&T. Stroustrup was seeking a new object-oriented language with which to write simulations. C++ has now become a mainstream systems programming language and is increasingly being used to implement free software packages. C++ underwent a lengthy standardization process and was ratified as an ISO standard in 1998.
+
+The first specification of C++ was available in a book titled `The Annotated C++ Reference Manual' by Stroustrup and Ellis, also known as the `ARM'. Since this initial specification, C++ has developed in some areas. These developments will be discussed in 16.2 Changeable C++.
+
+The first C++ compiler, known as cfront, was produced by Stroustrup at AT\&T. Because of its strong ties to C and because C is such a general purpose systems language, cfront consisted of a translator from C++ to C. After translation, an existing C compiler was used to compile the intermediate C code down to machine code for almost any machine you care to mention. C++ permits overloaded functions--that is, functions with the same name but different argument lists, so cfront implemented a name mangling algorithm (see section 16.3.2 Name Mangling) to give each function a unique name in the linker's symbol table.
+
+In 1989, the first true C++ compiler, G++, was written by Michael Tiemann of Cygnus Support. G++ mostly consisted of a new front-end to the GCC portable compiler, so G++ was able to produce code for most of the targets that GCC already supported.
+
+In the years following, a number of new C++ compilers were produced. Unfortunately many were unable to keep pace with the development of the language being undertaken by the standards committee. This divergence of implementations is the fundamental cause of non-portable C++ programs. 
+
+\section{Changeable C++}
+
+The C++ standard encompasses the language and the interface to the standard library, including the Standard Template Library (see section 16.2.13 Standard Template Library). The language has evolved somewhat since the ARM was published; mostly driven by the experience of early C++ users.
+
+In this section, the newer features of C++ will be briefly explained. Alternatives to these features, where available, will be presented when compiler support is lacking. The alternatives may be used if you need to make your code work with older C++ compilers or to avoid these features until the compilers you are concerned with are mature. If you are releasing a free software package to the wider community, you may need to specify a minimum level of standards conformance for the end-user's C++ compiler, or use the unappealing alternative of using lowest-common denominator C++ features.
+
+In covering these, we'll address the following language features:
+
+\begin{itemize}
+    \item Built-in bool type
+
+    \item Exceptions
+
+    \item Casts
+
+    \item Variable scoping in for loops
+
+    \item Namespaces
+
+    \item The explicit keyword
+
+    \item The mutable keyword
+
+    \item The typename keyword
+
+    \item Runtime Type Identification (RTTI)
+
+    \item Templates
+
+    \item Default template arguments
+
+    \item Standard library headers
+
+    \item Standard Template Library (STL) 
+\end{itemize}
+
+\subsection{Built-in bool type}
+
+C++ introduced a built-in boolean data type called bool. The presence of this new type makes it unnecessary to use an int with the values 0 and 1 and improves type safety. The two possible values of a bool are true and false--these are reserved words. The compiler knows how to coerce a bool into an int and vice-versa.
+
+If your compiler does not have the bool type and false and true keywords, an alternative is to produce such a type using a typedef of an enumeration representing the two possible values:
+
+ 	
+
+enum boolvals $\{$ false, true $\}$;
+typedef enum boolvals bool;
+
+What makes this simple alternative attractive is that it prevents having to adjust the prolific amount of code that might use bool objects once your compiler supports the built-in type. 
+
+\subsection{Exceptions}
+
+Exception handling is a language feature present in other modern programming languages. Ada and Java both have exception handling mechanisms. In essence, exception handling is a means of propogating a classified error by unwinding the procedure call stack until the error is caught by a higher procedure in the procedure call chain. A procedure indicates its willingness to handle a kind of error by catching it:
+
+\begin{Verbatim}[frame=single]
+void foo ();
+
+void func ()
+{
+ try 
+ {
+  foo ();
+ }
+ catch (...) 
+ {
+  cerr << "foo failed!" << endl;
+ }
+}
+\end{Verbatim}
+
+Conversely, a procedure can throw an exception when something goes wrong:
+
+\begin{Verbatim}[frame=single]
+typedef int io_error;
+
+void init ()
+{
+  int fd; 
+  fd = open ("/etc/passwd", O_RDONLY);
+  if (fd < 0) {
+    throw io_error(errno);
+  }
+}
+\end{Verbatim}
+
+C++ compilers tend to implement exception handling in full, or not at all. If any C++ compiler you may be concerned with does not implement exception handling, you may wish to take the lowest common denominator approach and eliminate such code from your project. 
+
+\subsection{Casts}
+
+C++ introduced a collection of named casting operators to replace the 
+conventional C-style cast of the form (type) expr. The new casting operators 
+are static\_{}cast, reinterpret\_{}cast, dynamic\_{}cast and 
+const\_{}cast. They are reserved words.
+
+These refined casting operators are vastly preferred over conventional C casts for C++ programming. In fact, even Stroustrup recommends that the older style of C casts be banished from programming projects where at all possible The C++ Programming Language, 3rd edition. Reasons for preferring the new named casting operators include: 
+
+\begin{itemize}
+\item They provide the programmer with a mechanism for more explicitly specifying the kind of type conversion. This assists the compiler in identifying incorrect conversions.
+\item They are easier to locate in source code, due to their unique 
+syntax: \verb+X_cast<type>+(expr).
+\end{itemize}
+
+If your compiler does not support the new casting operators, you may have to 
+continue to use C-style casts--and carefully! I have seen one project agree 
+to use macros such as the one shown below to encourage those involved in the 
+project to adopt the new operators. While the syntax does not match that of 
+the genuine operators, these macros make it easy to later locate and alter 
+the casts where they appear in source code.
+
+ 	
+
+
+\begin{Verbatim}[frame=single]
+#define static_cast(T,e) (T) e
+\end{Verbatim}
+
+\subsection{Variable Scoping in For Loops}
+
+C++ has always permitted the declaration of a control variable in the initializer section of for loops:
+
+ 	
+\begin{verbatim}
+for (int i = 0; i < 100; i++)
+{
+  ...
+}
+\end{verbatim}
+
+The original language specification allowed the control variable to remain live until the end of the scope of the loop itself: 
+
+\begin{Verbatim}[frame=single]
+for (int i = 0; i < j; i++)
+{
+  if (some condition)
+    break;
+}
+
+if (i < j)
+  // loop terminated early
+\end{Verbatim}
+
+In a later specification of the language, the control variable's scope only exists within the body of the for loop. The simple resolution to this incompatible change is to not use the older style. If a control variable needs to be used outside of the loop body, then the variable should be defined before the loop:
+
+\begin{Verbatim}[frame=single]
+int i;
+
+for (i = 0; i < j; i++)
+{
+  if (some condition)
+    break;
+}
+
+if (i < j)
+  // loop terminated early
+\end{Verbatim}
+
+\subsection{Namespaces}
+
+C++ namespaces are a facility for expressing a relationship between a set of related declarations such as a set of constants. Namespaces also assist in constraining names so that they will not collide with other idential names in a program. Namespaces were introduced to the language in 1993 and some early compilers were known to have incorrectly implemented namespaces. Here's a small example of namespace usage:
+
+ 	
+\begin{verbatim}
+namespace Animals {
+  class Bird {
+  public:
+    fly (); {} // fly, my fine feathered friend!
+  };
+};
+// Instantiate a bird.
+Animals::Bird b;
+\end{verbatim}
+
+
+For compilers which do not correctly support namespaces it is possible to achieve a similar effect by placing related declarations into an enveloping structure. Note that this utilises the fact that C++ structure members have public protection by default: 
+
+\begin{Verbatim}[frame=single]
+struct Animals {
+  class Bird {
+  public:
+    fly (); {} // fly, my find feathered friend!
+  };
+protected
+  // Prohibit construction.
+  Animals ();
+};
+
+// Instantiate a bird.
+Animals::Bird b;
+\end{Verbatim}
+
+\subsection{The explicit Keyword}
+
+C++ adopted a new explicit keyword to the language. This keyword is a qualifier used when declaring constructors. When a constructor is declared as explicit, the compiler will never call that constructor implicitly as part of a type conversion. This allows the compiler to perform stricter type checking and to prevent simple programming errors. If your compiler does not support the explicit keyword, you should avoid it and do without the benefits that it provides. 
+
+\subsection{The mutable Keyword}
+
+C++ classes can be designed so that they behave correctly when const objects of those types are declared. Methods which do not alter internal object state can be qualified as const: 
+
+\begin{Verbatim}[frame=single]
+class String
+{
+public:
+  String (const char* s);
+  ~String ();
+
+  size_t Length () const { return strlen (buffer); }
+
+private:
+  char* buffer;
+};
+\end{Verbatim}
+
+This simple, though incomplete, class provides a Length method which guarantees, by virtue of its const qualifier, to never modify the object state. Thus, const objects of this class can be instantiated and the compiler will permit callers to use such objects' Length method.
+
+The mutable keyword enables classes to be implemented where the concept of constant objects is sensible, but details of the implementation make it difficult to declare essential methods as const. A common application of the mutable keyword is to implement classes that perform caching of internal object data. A method may not modify the logical state of the object, but it may need to update a cache--an implementation detail. The data members used to implement the cache storage need to be declared as mutable in order for const methods to alter them.
+
+Let's alter our rather farfetched String class so that it implements a primitive cache that avoids needing to call the strlen library function on each invocation of Length (): 
+
+\begin{Verbatim}[frame=single]
+class String
+{
+public:
+ String (const char* s) :length(-1){/* copy string, etc. */}
+ ~String ();
+
+ size_t Length () const
+ {
+  if (length < 0)
+   length = strlen(buffer);
+  return length;
+ }
+
+private:
+  char* buffer;
+  mutable size_t length;
+}
+\end{Verbatim}
+
+When the mutable keyword is not available, your alternatives are to avoid implementing classes that need to alter internal data, like our caching string class, or to use the const\_{}cast casting operator (see section 16.2.3 Casts) to cast away the `constness' of the object. 
+
+\subsection{The typename Keyword}
+
+The typename keyword was added to C++ after the initial specification and is not recognized by all compilers. It is a hint to the compiler that a name following the keyword is the name of a type. In the usual case, the compiler has sufficient context to know that a symbol is a defined type, as it must have been encountered earlier in the compilation: 
+
+\begin{Verbatim}[frame=single]
+class Foo
+{
+public:
+  typedef int map_t;
+};
+
+void
+func ()
+{
+  Foo::map_t m;
+}
+\end{Verbatim}
+
+Here, map\_{}t is a type defined in class Foo. However, if func happened to 
+be a function template, the class which contains the map\_{}t type may be a 
+template parameter. In this case, the compiler simply needs to be guided by 
+qualifying T::map\_{}t as a type name:
+
+\begin{Verbatim}[frame=single]
+class Foo
+{
+public:
+  typedef int map_t;
+};
+
+template <typename T>
+void func ()
+{
+  typename T::map_t t;
+}
+\end{Verbatim}
+
+\subsection{Runtime Type Identification (RTTI)}
+
+Run-time Type Identification, or RTTI, is a mechanism for interrogating the type of an object at runtime. Such a mechanism is useful for avoiding the dreaded switch-on-type technique used before RTTI was incorporated into the language. Until recently, some C++ compilers did not support RTTI, so it is necessary to assume that it may not be widely available.
+
+Switch-on-type involves giving all classes a method that returns a special type token that an object can use to discover its own type. For example: 
+
+\begin{Verbatim}[frame=single]
+        class Shape
+        {
+        public:
+          enum types { TYPE_CIRCLE, TYPE_SQUARE };
+          virtual enum types type () = 0;
+        };
+
+        class Circle: public Shape
+        {
+        public:
+         enum types type () { return TYPE_CIRCLE; }
+        };
+
+        class Square: public Shape
+        {
+        public:
+          enum types type () { return TYPE_SQUARE; }
+        };
+\end{Verbatim}
+
+Although switch-on-type is not elegant, RTTI isn't particularly object-oriented either. Given the limited number of times you ought to be using RTTI, the switch-on-type technique may be reasonable.
+
+\subsection{Templates}
+
+Templates--known in other languages as generic types---permit you to write C++ classes which represent parameterized data types. A common application for class templates is container classes. That is, classes which implement data structures that can contain data of any type. For instance, a well-implemented binary tree is not interested in the type of data in its nodes. Templates have undergone a number of changes since their initial inclusion in the ARM. They are a particularly troublesome C++ language element in that it is difficult to implement templates well in a C++ compiler.
+
+Here is a fictitious and overly simplistic C++ class template that implements a fixed-sized stack. It provides a pair of methods for setting (and getting) the element at the bottom of the stack. It uses the modern C++ template syntax, including the new typename keyword (see section 16.2.8 The typename Keyword). 
+
+\begin{Verbatim}[frame=single]
+template <typename T> class Stack
+{
+public:
+  T first () { return stack[9]; }
+  void set_first (T t) { stack[9] = t; }
+
+private:
+  T stack[10];
+};
+\end{Verbatim}
+
+C++ permits this class to be instantiated for any type you like, using calling code that looks something like this:
+
+\begin{verbatim}
+int main ()
+{
+  Stack<int> s;
+  s.set_first (7);
+  cout << s.first () << endl;
+  return 0;
+}
+\end{verbatim}
+
+An old trick for fashioning class templates is to use the C preprocessor. Here is our limited Stack class, rewritten to avoid C++ templates: 
+
+\begin{Verbatim}[frame=single]
+#define Stack(T) \
+  class Stack__##T##__LINE__ \
+  { \
+  public: \
+    T first () { return stack[0]; } \
+    void set_first (T t) { stack[0] = t; } \
+  \
+  private: \
+    T stack[10]; \
+  }
+\end{Verbatim}
+
+There is a couple of subtleties being used here that should be highlighted. This generic class declaration uses the C preprocessor operator `\#\#' to generate a type name which is unique amongst stacks of any type. The \_{}\_{}LINE\_{}\_{} macro is defined by the preprocessor and is used here to maintain unique names when the template is instantiated multiple times. The trailing semicolon that must follow a class declaration has been omitted from the macro.
+
+ 	
+\begin{verbatim}
+int main ()
+{
+  Stack (int) s;
+  s.set_first (7);
+  cout << s.first () << endl;
+  return 0;
+}
+\end{verbatim}
+
+The syntax for instantiating a Stack is slightly different to modern C++, but it does work relatively well, since the C++ compiler still applies type checking after the preprocessor has expanded the macro. The main problem is that unless you go to great lengths, the generated type name (such as Stack\_{}\_{}int) could collide with other instances of the same type in the program. 
+
+\subsection{Default template arguments}
+
+A later refinement to C++ templates was the concept of default template arguments. Templates allow C++ types to be parameterized and as such, the parameter is in essence a variable that the programmer must specify when instantiating the template. This refinement allows defaults to be specified for the template parameters.
+
+This feature is used extensively throughout the Standard Template Library (see section 16.2.13 Standard Template Library) to relieve the programmer from having to specify a comparision function for sorted container classes. In most circumstances, the default less-than operator for the type in question is sufficient.
+
+If your compiler does not support default template arguments, you may have to suffer without them and require that users of your class and function templates provide the default parameters themselves. Depending on how inconvenient this is, you might begrudingly seek some assistance from the C preprocessor and define some preprocessor macros. 
+
+\subsection{Standard library headers}
+
+Newer C++ implementations provide a new set of standard library header files. These are distinguished from older incompatible header files by their filenames--the new headers omit the conventional `.h' extension. Classes and other declarations in the new headers are placed in the std namespace. Detecting the kind of header files present on any given system is an ideal application of Autoconf. For instance, the header `<vector>' declares the class std::vector<T>. However, if it is not available, `<vector.h>' declares the class vector<T> in the global namespace. 
+
+\subsection{Standard Template Library}
+
+The Standard Template Library (STL) is a library of containers, iterators and algorithms. I tend to think of the STL in terms of the container classes it provides, with algorithms and iterators necessary to make these containers useful. By segregating these roles, the STL becomes a powerful library--containers can store any kind of data and algorithms can use iterators to traverse the containers.
+
+There are about half a dozen STL implementations. Since the STL relies so heavily on templates, these implementations tend to inline all of their method definitions. Thus, there are no precompiled STL libraries, and as an added bonus, you're guaranteed to get the source code to your STL implementation. Hewlett-Packard and SGI produce freely redistributable STL implementations.
+
+It is widely known that the STL can be implemented with complex C++ constructs and is a certain workout for any C++ compiler. The best policy for choosing an STL is to use a modern compiler such as GCC 2.95 or to use the STL that your vendor may have provided as part of their compiler.
+
+Unfortunately, using the STL is pretty much an `all or nothing' proposition. If it is not available on a particular system, there are no viable alternatives. There is a macro in the Autoconf macro archive (see section 23.5.1 Autoconf macro archive) that can test for a working STL. 
+
+\section{Compiler Quirks}
+
+C++ compilers are complex pieces of software. Sadly, sometimes the details of a compiler's implementations leak out and bother the application programmer. The two aspects of C++ compiler implementation that have caused grief in the past are efficient template instantiation and name mangling. Both of these aspects will be explained. 
+
+\subsection{Template Instantiation}
+
+The problem with template instantiation exists because of a number of complex constraints:
+
+\begin{itemize}
+\item The compiler should only generate an instance of a template once, to speed the compilation process.
+\item The linker needs to be smart about where to locate the object code for instantiations produced by the compiler. 
+\end{itemize}
+
+This problem is exacerbated by separate compilation--that is, the method 
+bodies for List$<$T$>$ may be located in a header file or in a seperate 
+compilation unit. These files may even be in a different directory than the 
+current directory!
+
+Life is easy for the compiler when the template definition appears in the same compilation unit as the site of the instantiation--everything that is needed is known: 
+
+\begin{Verbatim}[frame=single]
+template <class T> class List
+{
+private:
+  T* head;
+  T* current;
+};
+
+List<int> li;
+\end{Verbatim}
+
+This becomes significantly more difficult when the site of a template instantiation and the template definition is split between two different compilation units. In Linkers and Loaders, Levine describes in detail how the compiler driver deals with this by iteratively attempting to link a final executable and noting, from `undefined symbol' errors produced by the linker, which template instantiations must be performed to successfully link the program.
+
+In large projects where templates may be instantiated in multiple locations, the compiler may generate instantiations multiple times for the same type. Not only does this slow down compilation, but it can result in some difficult problems for linkers which refuse to link object files containing duplicate symbols. Suppose there is the following directory layout: 
+
+\begin{Verbatim}[frame=single]
+src
+|
+`--- core
+|    `--- core.cxx
+`--- modules
+|    `--- http.cxx
+`--- lib
+     `--- stack.h
+\end{Verbatim}
+
+If the compiler generates `core.o' in the `core' directory and `libhttp.a' in the `http' directory, the final link may fail because `libhttp.a' and the final executable may contain duplicate symbols--those symbols generated as a result of both `http.cxx' and `core.cxx' instantiating, say, a Stack$<$int$>$. Linkers, such as that provided with AIX will allow duplicate symbols during a link, but many will not.
+
+Some compilers have solved this problem by maintaining a template repository of template instantiations. Usually, the entire template definition is expanded with the specified type parameters and compiled into the repository, leaving the linker to collect the required object files at link time.
+
+The main concerns about non-portability with repositories center around getting your compiler to do the right thing about maintaining a single repository across your entire project. This often requires a vendor-specific command line option to the compiler, which can detract from portability. It is conceivable that Libtool could come to the rescue here in the future. 
+
+\subsection{Name Mangling}
+
+Early C++ compilers mangled the names of C++ symbols so that existing linkers could be used without modification. The cfront C++ translator also mangled names so that information from the original C++ program would not be lost in the translation to C. Today, name mangling remains important for enabling overloaded function names and link-time type checking. Here is an example C++ source file which illustrates name mangling in action: 
+
+\begin{Verbatim}[frame=single]
+class Foo
+{
+public:
+  Foo ();
+  
+  void go ();
+  void go (int where);
+
+private:
+  int pos;
+};
+
+Foo::Foo ()
+{
+  pos = 0;
+}
+
+void
+Foo::go ()
+{
+  go (0);
+}
+
+void
+Foo::go (int where)
+{
+  pos = where;
+}
+
+int
+main ()
+{
+  Foo f;
+  f.go (10);
+}
+
+$ g++ -Wall example.cxx -o example.o
+
+$ nm --defined-only example.o
+00000000 T __3Foo
+00000000 ? __FRAME_BEGIN__
+00000000 t gcc2_compiled.
+0000000c T go__3Foo
+0000002c T go__3Fooi
+00000038 T main
+\end{Verbatim}
+
+Even though Foo contains two methods with the same name, their argument lists
+(one taking an int, one taking no arguments) help to differentiate them 
+once their names are mangled. The `go\_{}\_{}3Fooi' is the version which 
+takes an int argument. The `\_{}\_{}3Foo' symbol is the constructor for Foo.
+The GNU binutils package includes a utility called c++filt that can demangle 
+names. Other proprietary tools sometimes include a similar utility, although 
+with a bit of imagination, you can often demangle names in your head.
+
+\begin{Verbatim}[frame=single]
+$ nm --defined-only example.o | c++filt
+00000000 T Foo::Foo(void)
+00000000 ? __FRAME_BEGIN__
+00000000 t gcc2_compiled.
+0000000c T Foo::go(void)
+0000002c T Foo::go(int)
+00000038 T main
+\end{Verbatim}
+
+Name mangling algorithms differ between C++ implementations so that object files assembled by one tool chain may not be linked by another if there are legitimate reasons to prohibit linking. This is a deliberate move, as other aspects of the object file may make them incompatible--such as the calling convention used for making function calls.
+
+This implies that C++ libraries and packages cannot be practically distributed in binary form. Of course, you were intending to distribute the source code to your package anyway, weren't you? 
+
+\section{How GNU Autotools Can Help}
+
+Each of the GNU Autotools contribute to C++ portability. Now that you are familiar with the issues, the following subsections will outline precisely how each tool contributes to achieving C++ portability. 
+
+\subsection{Testing C++ Implementations with Autoconf}
+
+Of the GNU Autotools, perhaps the most valuable contribution to the portability of your C++ programs will come from Autoconf. All of the portability issues raised in 16.2 Changeable C++ can be detected using Autoconf macros.
+
+Luc Maisonobe has written a large suite of macros for this purpose and they can be found in the Autoconf macro archive (see section 23.5.1 Autoconf macro archive). If any of these macros become important enough, they may become incorporated into the core Autoconf release. These macros perform their tests by compiling small fragments of C++ code to ensure that the compiler accepts them. As a side effect, these macros typically use AC\_{}DEFINE to define preprocessor macros of the form HAVE\_{}feature, which may then be exploited through conditional compilation. 
+
+\subsection{Automake C++ support}
+
+Automake provides support for compiling C++ programs. In fact, it makes it 
+practically trivial: files listed in a SOURCES primary may 
+include `.c++', `.cc', `.cpp', `.cxx' or `.C' extensions and Automake will 
+know to use the C++ compiler to build them.
+
+For a project containing C++ source code, it is necessary to invoke 
+the AC\_{}PROG\_{}CXX macro in `configure.in' so that Automake knows 
+how to run the most suitable compiler. Fortunately, when little details like 
+this happen to escape you, automake will produce a warning:
+
+ 	
+
+\begin{verbatim}
+$ automake
+automake: Makefile.am: C++ source seen but CXX not defined in
+automake: Makefile.am: `configure.in'
+\end{verbatim}
+
+\subsection{Libtool C++ support}
+
+At the moment, Libtool is the weak link in the chain when it comes to working with C++. It is very easy to naively build a shared library from C++ source using libtool: 
+
+\begin{Verbatim}[frame=single]
+$ libtool -mode=link g++ -o libfoo.la -rpath \
+/usr/local/lib foo.c++
+\end{Verbatim}
+
+This works admirably for trivial examples, but with real code, there are several things that can go wrong:
+\begin{itemize}
+    \item On many architectures, for a variety of reasons, libtool needs to perform object linking using ld. Unfortunately, the C++ compiler often links in standard libraries at this stage, and using ld causes them to be dropped.
+
+      This can be worked around (at the expense of portability) by explicity adding these missing libraries to the link line in your `Makefile'. You could even write an Autoconf macro to probe the host machine to discover likely candidates.
+
+    \item The C++ compiler likes to instantiate static constructors in the library objects, which C++ programmers often rely on. Linking with ld will cause this to fail.
+
+The only reliable way to work around this currently is to not write 
+C++ that relies on static constructors in libraries. You might be lucky 
+enough to be able to link with LD=\$CXX in your environment with some projects, but it would be prone to stop working as your project develops.
+
+    \item Libtool's inter-library dependency analysis can fail when it can't find the special runtime library dependencies added to a shared library by the C++ compiler at link time.
+\end{itemize}
+
+      The best way around this problem is to explicity add these dependencies to libtool's link line: 
+
+\begin{Verbatim}[frame=single]
+$ libtool -mode=link g++ -o libfoo.la -rpath /usr/local/lib \
+foo.cxx -lstdc++ -lg++
+\end{Verbatim}
+
+Now that C++ compilers on Unix are beginning to see widespread acceptance and are converging on the ISO standard, it is becoming unacceptable for Libtool to impose such limits. There is work afoot to provide generalized multi-language and multi-compiler support into Libtool----currently slated to arrive in Libtool 1.5. Much of the work for supporting C++ is already finished at the time of writing, pending beta testing and packaging(36).
+
+
+\section{Further Reading}
+
+A number of books have been published which are devoted to the topic of C++ portability. Unfortunately, the problem with printed publications that discuss the state of C++ is that they date quickly. These publications may also fail to cover inadequacies of your particular compiler, since portability know-how is something that can only be acquired by collective experience.
+
+Instead, online guides such as the Mozilla C++ Portability Guide (37) tend to be a more useful resource. An online guide such as this can accumulate the knowledge of a wider developer community and can be readily updated as new facts are discovered. Interestingly, the Mozilla guide is aggresive in its recommendations for achieving true C++ portability: item 3, for instance, states `Don't use exceptions'. While you may not choose to follow each recommendation, there is certainly a lot of useful experience captured in this document. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

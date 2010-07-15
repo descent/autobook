@@ -1,0 +1,762 @@
+\chapter{A Complex GNU Autotools Project}\label{C_A_Complex_GNU_Autotools_Project}
+
+This chapter polishes the worked example I introduced in 9. A Small GNU Autotools Project, and developed in 12. A Large GNU Autotools Project. As always, the ideas presented here are my own views and not necessarily the only way to do things. Everything I present here has, however, served me well for quite some time, and you should find plenty of interesting ideas for your own projects.
+
+Herein, I will add a libltdl module loading system to Sic, as well as some sample modules to illustrate how extensible such a project can be. I will also explain how to integrate the `dmalloc' library into the development of a project, and show why this is important.
+
+If you noticed that, as it stands, Sic is only useful as an interactive shell unable to read commands from a file, then go to the top of the class! In order for it to be of genuine use, I will extend it to interpret commands from a file too. 
+
+\section{A Module Loading Subsystem}
+
+As you saw in chapter \ref{C_Using_GNU_libltdl} Using GNU libltdl
+(page \pageref{C_Using_GNU_libltdl}), I need to put an invocation of the 
+macro `AC\_{}LIBTOOL\_{}DLOPEN' just before `AC\_{}PROG\_{}LIBTOOL', in the 
+file `configure.in'. But, as well as being able to use libtoolize --ltdl, which adds libltdl in a subdirectory with its own subconfigure, you can also manually copy just the ltdl source files into your project(45), and use AC\_{}LIB\_{}LTDL in your existing `configure.in'. At the time of writing, this is still a very new and (as yet) undocumented feature, with a few kinks that need to be ironed out. In any case you probably shouldn't use this method to add `ltdl.lo' to a C++ library, since `ltdl.c' is written in C. If you do want to use libltdl with a C++ library, things will work much better if you build it in a subdirectory generated with libtoolize --ltdl.
+
+For this project, lets: 
+
+\begin{Verbatim}[frame=single]
+$ cp /usr/share/libtool/libltdl/ltdl.[ch] sic/
+\end{Verbatim}
+
+The Sic module loader is probably as complicated as any you will ever need to write, since it must support two kinds of modules: modules which contain additional built-in commands for the interpreter; and modules which extend the Sic syntax table. A single module can also provide both syntax extensions and additional built-in commands.
+
+\subsection{Initialising the Module Loader}
+
+Before using this code (or any other libltdl based module loader for that matter), a certain amount of initialisation is required:
+
+\begin{itemize}
+    \item libltdl itself requires initialisation.
+
+\begin{enumerate}
+\item libltdl should be told to use the same memory allocation routines used by the rest of Sic.
+
+\item Any preloaded modules (see section \ref{S_dlpreopen_Loading}
+dlpreopen Loading, page \pageref{S_dlpreopen_Loading}) need to be initialised 
+with LTDL\_{}SET\_{}PRELOADED\_{}SYMBOLS().
+
+         \item ltdl\_{}init() must be called. 
+\end{enumerate}
+
+    \item The module search path needs to be set. Here I allow the installer to specify a default search path to correspond with the installed Sic modules at compile time, but search the directories in the runtime environment variable `SIC\_{}MODULES\_{}PATH' first.
+
+    \item The internal error handling needs to be initialised. 
+\end{itemize}
+
+Here is the start of the module loader, `sic/module.c', including the initialisation code for libltdl:
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include "common.h"
+#include "builtin.h"
+#include "eval.h"
+#include "ltdl.h"
+#include "module.h"
+#include "sic.h"
+
+#ifndef SIC_MODULE_PATH_ENV
+#  define SIC_MODULE_PATH_ENV   "SIC_MODULE_PATH"
+#endif
+
+int module_init (void)
+{
+  static int initialised = 0;
+  int errors = 0;
+
+  /* Only perform the initialisation once. */
+  if (!initialised)
+    {
+      /* ltdl should use the same mallocation as us. */
+      lt_dlmalloc = (lt_ptr_t (*) (size_t)) xmalloc;
+      lt_dlfree = (void (*) (lt_ptr_t)) free;
+
+      /* Make sure preloaded modules are initialised. */
+      LTDL_SET_PRELOADED_SYMBOLS();
+
+      last_error = NULL;
+
+      /* Call ltdl initialisation function. */
+      errors = lt_dlinit();
+
+
+      /* Set up the module search directories. */
+      if (errors == 0)
+        {
+          const char *path = getenv (SIC_MODULE_PATH_ENV);
+
+          if (path != NULL)
+            errors = lt_dladdsearchdir(path);
+        }
+
+      if (errors == 0)
+        errors = lt_dladdsearchdir(MODULE_PATH);
+
+      if (errors != 0)
+        last_error = lt_dlerror ();
+
+      ++initialised;
+
+      return errors ? SIC_ERROR : SIC_OKAY;
+    }
+
+  last_error = multi_init_error;
+  return SIC_ERROR;
+}
+\end{Verbatim}
+
+\subsection{Managing Module Loader Errors}
+
+The error handling is a very simplistic wrapper for the libltdl error 
+functions, with the addition of a few extra errors specific to this module 
+loader code(46). Here are the error messages from `module.c':
+
+ 	
+\begin{Verbatim}[frame=single]
+static char multi_init_error[]
+         = "module loader initialised more than once";
+static char no_builtin_table_error[]
+         = "module has no builtin or syntax table";
+static char builtin_unload_error[]
+         = "builtin table failed to unload";
+static char syntax_unload_error[]
+         = "syntax table failed to unload";
+static char module_not_found_error[]
+         = "no such module";
+static char module_not_unloaded_error[]
+         = "module not unloaded";
+
+static const char *last_error = NULL;
+
+const char *
+module_error (void)
+{
+  return last_error;
+}
+\end{Verbatim}
+
+\subsection{Loading a Module}\label{S_Loading_a_Module}
+
+Individual modules are managed by finding specified entry points (prescribed exported symbols) in the module: 
+
+\begin{description}
+\item[Variable: const Builtin * builtin\_{}table]
+\
+
+    An array of names of built-in commands implemented by a module, with associated handler functions. 
+
+\item[Function: void module\_{}init (Sic *sic)]
+\
+
+    If present, this function will be called when the module is loaded. 
+
+\item[Function: void module\_{}finish (Sic *sic)]
+\
+
+If supplied, this function will be called just before the module is unloaded. 
+
+\item[Variable: const Syntax * syntax\_{}table]
+\
+
+    An array of syntactically significant symbols, and associated handler functions. 
+
+\item[Function: int syntax\_{}init (Sic *sic)]
+\
+
+If specified, this function will be called by Sic before the syntax of each input line is analysed. 
+
+\item[Function: int syntax\_{}finish (Sic *sic, BufferIn *in, BufferOut *out) ]
+Similarly, this function will be call after the syntax analysis of each 
+line has completed. 
+\end{description}
+
+All of the hard work in locating and loading the module, and extracting addresses for the symbols described above is performed by libltdl. The module\_{}load function below simply registers these symbols with the Sic interpreter so that they are called at the appropriate times -- or diagnoses any errors if things don't go according to plan:
+
+\begin{Verbatim}[frame=single]
+int module_load (Sic *sic, const char *name)
+{
+ lt_dlhandle module;
+ Builtin *builtin_table;
+ Syntax *syntax_table;
+ int status = SIC_OKAY;
+
+ last_error = NULL;
+
+ module = lt_dlopenext (name);
+
+ if (module)
+ {
+  builtin_table=(Builtin*)lt_dlsym(module,"builtin_table");
+  syntax_table = (Syntax *) lt_dlsym (module, "syntax_table");
+  if (!builtin_table && !syntax_table)
+  {
+   lt_dlclose (module);
+   last_error = no_builtin_table_error;
+   module = NULL;
+  }
+ }
+
+ if (module)
+ {
+  ModuleInit *init_func
+   =(ModuleInit *)lt_dlsym(module, "module_init");
+  if (init_func)
+  (*init_func) (sic);
+ }
+
+ if (module)
+ {
+  SyntaxFinish *syntax_finish
+   = (SyntaxFinish *) lt_dlsym (module, "syntax_finish");
+  SyntaxInit *syntax_init
+   = (SyntaxInit *) lt_dlsym (module, "syntax_init");
+
+  if (syntax_finish)
+   sic->syntax_finish = list_cons (list_new (syntax_finish),
+                                   sic->syntax_finish);
+  if (syntax_init)
+   sic->syntax_init = list_cons (list_new (syntax_init),
+                                      sic->syntax_init);
+ }
+
+ if (module)
+ {
+  if (builtin_table)
+   status = builtin_install (sic, builtin_table);
+
+  if (syntax_table && status == SIC_OKAY)
+   status = syntax_install (sic, module, syntax_table);
+
+  return status;
+ }
+
+ last_error = lt_dlerror();
+ if (!last_error)
+  last_error = module_not_found_error;
+
+ return SIC_ERROR;
+}
+\end{Verbatim}
+
+Notice that the generalised List data type introduced earlier
+(see chapter \ref{C_A_Small_GNU_Autotools_Project}
+A Small GNU Autotools Project, page \pageref{C_A_Small_GNU_Autotools_Project})
+is reused to keep a list of accumulated module initialisation and finalisation functions.
+
+\subsection{Unloading a Module}
+
+When unloading a module, several things must be done: 
+
+\begin{itemize}
+\item Any built-in commands implemented by this module must be unregistered so that Sic doesn't try to call them after the implementation has been removed.
+
+\item Any syntax extensions implemented by this module must be similarly unregistered, including syntax\_{}init and syntax\_{}finish functions.
+
+\item If there is a finalisation entry point in the module, `module\_{}finish'
+(see section \ref{S_Loading_a_Module} Loading a Module,
+page \pageref{S_Loading_a_Module}), it must be called.
+\end{itemize}
+
+My first cut implementation of a module subsystem kept a list of the entry points associated with each module so that they could be looked up and removed when the module was subsequently unloaded. It also kept track of multiply loaded modules so that a module wasn't unloaded prematurely. libltdl already does all of this though, and it is wasteful to duplicate all of that work. This system uses lt\_{}dlforeach and lt\_{}dlgetinfo to access libltdls records of loaded modules, and save on duplication. These two functions are described fully insection `Libltdl interface' in The Libtool Manual.
+
+\begin{Verbatim}[frame=single]
+static int unload_ltmodule(lt_dlhandle module, lt_ptr_t data);
+
+struct unload_data { Sic *sic; const char *name; };
+
+int module_unload (Sic *sic, const char *name)
+{
+  struct unload_data data;
+
+  last_error = NULL;
+
+  data.sic = sic;
+  data.name = name;
+
+  /* Stopping might be an error, or we may have 
+     unloaded the module. */
+  if (lt_dlforeach (unload_ltmodule, (lt_ptr_t) &data) != 0)
+    if (!last_error)
+      return SIC_OKAY;
+
+  if (!last_error)
+    last_error = module_not_found_error;
+    
+  return SIC_ERROR;
+}
+\end{Verbatim}
+
+This function asks libltdl to call the function unload\_{}ltmodule for each of the modules it has loaded, along with some details of the module it wants to unload. The tricky part of the callback function below is recalculating the ntry point addresses for the module to be unloaded and then removing all matching addresses from the appropriate internal structures. Otherwise, the balance of this callback is involved in informing the calling lt\_{}dlforeach loop of whether a matching module has been found and handled:
+
+\begin{Verbatim}[frame=single]
+static int userdata_address_compare(List *elt, void *match);
+
+/* This callback returns 0 if the module was not yet found.
+   If there is an error, LAST_ERROR will be set, otherwise the
+   module was successfully unloaded. */
+static int unload_ltmodule (lt_dlhandle module, void *data)
+{
+  struct unload_data *unload = (struct unload_data *) data;
+  const lt_dlinfo *module_info = lt_dlgetinfo (module);
+
+  if ((unload == NULL)
+      || (unload->name == NULL)
+      || (module_info == NULL)
+      || (module_info->name == NULL)
+      || (strcmp (module_info->name, unload->name) != 0))
+    {
+      /* No match, return 0 to keep searching */
+      return 0;
+    }
+  
+  if (module)
+  {
+/* Fetch the addresses of the entrypoints into the module. */
+   Builtin *builtin_table
+     = (Builtin*) lt_dlsym (module, "builtin_table");
+   Syntax *syntax_table
+     = (Syntax *) lt_dlsym (module, "syntax_table");
+   void *syntax_init_address
+     = (void *) lt_dlsym (module, "syntax_init");
+   void **syntax_finish_address
+     = (void *) lt_dlsym (module, "syntax_finish");
+   List *stale;
+
+/* Remove all references to these entry points in the internal
+   data structures, before actually unloading the module. */
+   stale = list_remove (&unload->sic->syntax_init,
+               syntax_init_address, userdata_address_compare);
+   XFREE (stale);
+        
+   stale = list_remove (&unload->sic->syntax_finish,
+            syntax_finish_address, userdata_address_compare);
+   XFREE (stale);
+
+   if (builtin_table && 
+    builtin_remove (unload->sic, builtin_table) != SIC_OKAY)
+   {
+    last_error = builtin_unload_error;
+    module = NULL;
+   }
+
+   if (syntax_table && 
+    SIC_OKAY!=syntax_remove(unload->sic,module,syntax_table))
+   {
+    last_error = syntax_unload_error;
+    module = NULL;
+   }
+  }
+  
+  if (module)
+    {
+      ModuleFinish *finish_func
+        = (ModuleFinish *) lt_dlsym (module, "module_finish");
+
+      if (finish_func)
+        (*finish_func) (unload->sic);
+    }
+
+  if (module)
+    {
+      if (lt_dlclose (module) != 0)
+        module = NULL;
+    }
+
+  /* No errors?  Stop the search! */
+  if (module)
+    return 1;
+      
+  /* Find a suitable diagnostic. */
+  if (!last_error)
+    last_error = lt_dlerror();
+  if (!last_error)
+    last_error = module_not_unloaded_error;
+      
+  /* Error diagnosed.  Stop the search! */
+  return -1;
+}
+
+static int
+userdata_address_compare (List *elt, void *match)
+{
+  return (int) (elt->userdata - match);
+}
+\end{Verbatim}
+
+The userdata\_{}address\_{}compare helper function at the end is used to compare the address of recalculated entry points against the already registered functions and handlers to find which items need to be unregistered.
+
+There is also a matching header file to export the module interface, so that the code for loadable modules can make use of it:
+
+ 	
+\begin{Verbatim}[frame=single]
+#ifndef SIC_MODULE_H
+#define SIC_MODULE_H 1
+
+#include <sic/builtin.h>
+#include <sic/common.h>
+#include <sic/sic.h>
+
+BEGIN_C_DECLS
+
+typedef void ModuleInit         (Sic *sic);
+typedef void ModuleFinish       (Sic *sic);
+
+extern const char *module_error (void);
+extern int module_init          (void);
+extern int module_load          (Sic *sic, const char *name);
+extern int module_unload        (Sic *sic, const char *name);
+
+END_C_DECLS
+
+#endif /* !SIC_MODULE_H */
+\end{Verbatim}
+ 	
+This header also includes some of the other Sic headers, so that in most cases,
+the source code for a module need only `\#include $<$sic/module.h$>$'.
+
+To make the module loading interface useful, I have added built-ins for `load' and `unload'. Naturally, these must be compiled into the bare sic executable, so that it is able to load additional modules:
+
+ 	
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include "module.h"
+#include "sic_repl.h"
+
+/* List of built in functions. */
+#define builtin_functions               \
+        BUILTIN(exit,           0, 1)   \
+        BUILTIN(load,           1, 1)   \
+        BUILTIN(unload,         1, -1)
+
+BUILTIN_DECLARATION (load)
+{
+  int status = SIC_ERROR;
+
+  if (module_load (sic, argv[1]) < 0)
+    {
+      sic_result_clear (sic);
+      sic_result_append (sic, "module \"", argv[1],
+                         "\" not loaded: ",
+                         module_error (), NULL);
+    }
+  else
+    status = SIC_OKAY;
+
+  return status;
+}
+
+BUILTIN_DECLARATION (unload)
+{
+  int status = SIC_ERROR;
+  int i;
+
+  for (i = 1; argv[i]; ++i)
+    if (module_unload (sic, argv[i]) != SIC_OKAY)
+      {
+        sic_result_clear (sic);
+        sic_result_append(sic, "module \"", argv[1],
+                          "\" not unloaded: ", module_error(),
+                          NULL);
+      }
+    else
+      status = SIC_OKAY;
+
+  return status;
+}
+\end{Verbatim}
+
+These new built-in commands are simply wrappers around the module loading code in `module.c'.
+
+As with `dlopen', you can use libltdl to `lt\_{}dlopen' the main executable, and then lookup its symbols. I have simplified the initialisation of Sic by replacing the sic\_{}init function in `src/sic.c' by `loading' the executable itself as a module. This works because I was careful to use the same format in `sic\_{}builtin.c' and `sic\_{}syntax.c' as would be required for a genuine loadable module, like so: 
+ 	
+\begin{Verbatim}[frame=single]
+  /* initialise the module subsystem */
+  if (module_init () != SIC_OKAY)
+      sic_fatal ("module initialisation failed");
+
+  if (module_load (sic, NULL) != SIC_OKAY)
+      sic_fatal ("sic initialisation failed");
+\end{Verbatim}
+
+\section{A Loadable Module}
+
+A feature of the Sic interpreter is that it will use the `unknown' built-in to handle any command line which is not handled by any of the other registered built-in callback functions. This mechanism is very powerful, and allows me to lookup unhandled built-ins in the user's `PATH', for instance.
+
+Before adding any modules to the project, I have created a separate subdirectory, `modules', to put the module source code into. Not forgetting to list this new subdirectory in the AC\_{}OUTPUT macro in `configure.in', and the SUBDIRS macro in the top level `Makefile.am', a new `Makefile.am' is needed to build the loadable modules: 
+ 	
+\begin{Verbatim}[frame=single]
+## Makefile.am -- Process this file with 
+## automake to produce Makefile.in
+INCLUDES        = -I$(top_builddir) -I$(top_srcdir) \
+                -I$(top_builddir)/sic -I$(top_srcdir)/sic \
+                -I$(top_builddir)/src -I$(top_srcdir)/src
+
+pkglib_LTLIBRARIES = unknown.la
+\end{Verbatim}
+
+pkglibdir is a Sic specific directory where modules will be installed, See section Installing and Uninstalling Configured Packages.
+
+\begin{quote}
+    For a library to be maximally portable, it should be written so that it does not require back-linking(47) to resolve its own symbols. That is, if at all possible you should design all of your libraries (not just dynamic modules) so that all of their symbols can be resolved at linktime. Sometimes, it is impossible or undesireable to architect your libraries and modules in this way. In that case you sacrifice the portability of your project to platforms such as AIX and Windows. 
+\end{quote}
+
+The key to building modules with libtool is in the options that are specified when the module is linked. This is doubly true when the module must work with libltdl's dlpreopening mechanism. 
+ 	
+\begin{Verbatim}[frame=single]
+unknown_la_SOURCES = unknown.c
+unknown_la_LDFLAGS = -no-undefined -module -avoid-version
+unknown_la_LIBADD  = $(top_builddir)/sic/libsic.la
+\end{Verbatim}
+
+Sic modules are built without a `lib' prefix (`-module'), and without version suffixes (`-avoid-version'). All of the undefined symbols are resolved at linktime by `libsic.la', hence `-no-undefined'.
+
+Having added `ltdl.c' to the `sic' subdirectory, and called the AC\_{}LIB\_{}LTDL macro in `configure.in', `libsic.la' cannot build correctly on those architectures which do not support back-linking. This is because `ltdl.c' simply abstracts the native dlopen API with a common interface, and that local interface often requires that a special library be linked -- `-ldl' on linux, for example. AC\_{}LIB\_{}LTDL probes the system to determine the name of any such dlopen library, and allows you to depend on it in a portable way by using the configure substitution macro, `@LIBADD\_{}DL@'. If I were linking a libtool compiled libltdl at this juncture, the system library details would have already been taken care of. In this project, I have bypassed that mechanism by compiling and linking `ltdl.c' myself, so I have altered `sic/Makefile.am' to use `@LIBADD\_{}DL@': 
+ 	
+\begin{Verbatim}[frame=single]
+lib_LTLIBRARIES   = libcommon.la libsic.la
+
+libsic_la_LIBADD  = $(top_builddir)/replace/libreplace.la \
+                        libcommon.la @LIBADD_DL@
+libsic_la_SOURCES = builtin.c error.c eval.c list.c ltdl.c \
+                        module.c sic.c syntax.c
+\end{Verbatim}
+
+Having put all this infrastructure in place, the code for the `unknown' module is a breeze (helper functions omitted for brevity):
+
+ 	
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sic/module.h>
+
+#define builtin_table   unknown_LTX_builtin_table
+
+static char *path_find  (const char *command);
+static int path_execute (Sic *sic, const char *path,
+                         char *const argv[]);
+
+/* Generate prototype. */
+SIC_BUILTIN (builtin_unknown);
+
+Builtin builtin_table[] = {
+  { "unknown", builtin_unknown, 0, -1 },
+  { 0, 0, -1, -1 }
+};
+
+BUILTIN_DECLARATION(unknown)
+{
+  char *path = path_find (argv[0]);
+  int status = SIC_ERROR;
+
+  if (!path)
+    sic_result_append (sic, "command \"", argv[0],
+                       "\" not found",
+                       NULL);
+  else if (path_execute (sic, path, argv) != SIC_OKAY)
+    sic_result_append (sic, "command \"", argv[0],
+                       "\" failed: ",
+                       strerror (errno), NULL);
+  else
+    status = SIC_OKAY;
+
+  return status;
+}
+\end{Verbatim}
+In the first instance, notice that I have used the preprocessor to redefine the entry point functions to be compatible with libltdls dlpreopen, hence the unknown\_{}LTX\_{}builtin\_{}table cpp macro. The `unknown' handler function itself looks for a suitable executable in the user's path, and if something suitable is found, executes it.
+
+Notice that Libtool doesn't relink dependent libraries (`libsic' depends on `libcommon', for example) on my GNU/Linux system, since they are not required for the static library in any case, and because the dependencies are also encoded directly into the shared archive, `libsic.so', by the original link. On the other hand, Libtool will relink the dependent libraries if that is necessary for the target host. 
+ 	
+\begin{Verbatim}[frame=single]
+$ make
+/bin/sh ../libtool --mode=compile gcc -DHAVE_CONFIG_H -I. \
+-I. -I.. -I.. -I.. -I../sic -I../sic -I../src -I../src \   
+-g -O2 -c unknown.c
+mkdir .libs
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I.. -I.. -I../sic -I../sic \
+-I../src  -I../src -g -O2 -Wp,-MD,.deps/unknown.pp \
+-c unknown.c  -fPIC -DPIC -o .libs/unknown.lo
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I.. -I.. -I../sic -I../sic \
+-I../src I../src -g -O2 -Wp,-MD,.deps/unknown.pp \
+-c unknown.c -o unknown.o >/dev/null 2>&1
+mv -f .libs/unknown.lo unknown.lo
+/bin/sh ../libtool --mode=link gcc  -g -O2  -o unknown.la \
+-rpath /usr/local/lib/sic -no-undefined -module \
+-avoid-version unknown.lo ../sic/libsic.la
+rm -fr .libs/unknown.la .libs/unknown.* .libs/unknown.*
+gcc -shared  unknown.lo -L/tmp/sic/sic/.libs \
+../sic/.libs/libsic.so -lc  -Wl,-soname -Wl,unknown.so \
+-o .libs/unknown.so
+ar cru .libs/unknown.a  unknown.o
+creating unknown.la
+(cd .libs && rm -f unknown.la && \
+ ln -s ../unknown.la unknown.la)
+$ ./libtool --mode=execute ldd ./unknown.la
+    libsic.so.0 => /tmp/sic/.libs/libsic.so.0 (0x40002000)
+    libc.so.6 => /lib/libc.so.6 (0x4000f000)
+    libcommon.so.0 => /tmp/sic/.libs/libcommon.so.0 (0x400ec000)
+    libdl.so.2 => /lib/libdl.so.2 (0x400ef000)
+    /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x80000000)
+\end{Verbatim}
+
+After compiling the rest of the tree, I can now use the `unknown' module:
+ 	
+\begin{Verbatim}[frame=single]
+$ SIC_MODULE_PATH=`cd ../modules; pwd` ./sic
+] echo hello!
+command "echo" not found.
+] load unknown
+] echo hello!
+hello!
+] unload unknown
+] echo hello!
+command "echo" not found.
+] exit
+$
+\end{Verbatim}
+
+\section{Interpreting Commands from a File}
+
+For all practical purposes, any interpreter is pretty useless if it only works interactively. I have added a `source' built-in command to `sic\_{}builtin.c' which takes lines of input from a file and evaluates them using `sic\_{}repl.c' in much the same way as lines typed at the prompt are evaluated otherwise. Here is the built-in handler: 
+ 	
+\begin{Verbatim}[frame=single]
+/* List of built in functions. */
+#define builtin_functions               \
+        BUILTIN(exit,           0, 1)   \
+        BUILTIN(load,           1, 1)   \
+        BUILTIN(source,         1, -1)  \
+        BUILTIN(unload,         1, -1)
+
+BUILTIN_DECLARATION (source)
+{
+  int status = SIC_OKAY;
+  int i;
+
+  for (i = 1; status == SIC_OKAY && argv[i]; ++i)
+    status = source (sic, argv[i]);
+
+  return status;
+}
+\end{Verbatim}
+
+And the source function from `sic\_{}repl.c':
+ 	
+\begin{Verbatim}[frame=single]
+int source (Sic *sic, const char *path)
+{
+  FILE *stream;
+  int result = SIC_OKAY;
+  int save_interactive = is_interactive;
+
+  SIC_ASSERT (sic && path);
+  
+  is_interactive = 0;
+
+  if ((stream = fopen (path, "rt")) == NULL)
+  {
+   sic_result_clear (sic);
+   sic_result_append (sic, "cannot source \"", path, "\": ",
+                      strerror (errno), NULL);
+   result = SIC_ERROR;
+  }
+  else
+   result =  evalstream (sic, stream);
+
+  is_interactive = save_interactive;
+
+  return result;
+}
+\end{Verbatim}
+
+The reason for separating the source function in this way, is that it makes it easy for the startup sequence in main to evaluate a startup file. In traditional Unix fashion, the startup file is named `.sicrc', and is evaluated if it is present in the user's home directory:
+
+ 	
+
+ 	
+\begin{Verbatim}[frame=single]
+static int evalsicrc (Sic *sic)
+{
+  int result = SIC_OKAY;
+  char *home = getenv ("HOME");
+  char *sicrcpath, *separator = "";
+  int len;
+
+  if (!home)
+    home = "";
+
+  len = strlen (home);
+  if (len && home[len -1] != '/')
+    separator = "/";
+
+  len += strlen (separator) + strlen (SICRCFILE) + 1;
+
+  sicrcpath = XMALLOC (char, len);
+  sprintf (sicrcpath, "%s%s%s", home, separator, SICRCFILE);
+
+  if (access (sicrcpath, R_OK) == 0)
+    result = source (sic, sicrcpath);
+
+  return result;
+}
+\end{Verbatim}
+
+\section{Integrating Dmalloc}
+
+A huge number of bugs in C and C++ code are caused by mismanagement of memory. Using the wrapper functions described earlier (see section 9.2.1.2 Memory Management), or their equivalent, can help immensely in reducing the occurence of such bugs. Ultimately, you will introduce a difficult-to-diagnose memory bug inspite of these measures.
+
+That is where Dmalloc(48) comes in. I recommend using it routinely in all of your projects -- you will find all sorts of leaks and bugs that might otherwise have lain dormant for some time. Automake has explicit support for Dmalloc to make using it in your own projects as painless as possible. The first step is to add the macro `AM\_{}WITH\_{}DMALLOC' to `configure.in'. Citing this macro adds a `--with-dmalloc' option to configure, which, when specified by the user, adds `-ldmalloc' to `LIBS' and defines `WITH\_{}DMALLOC'.
+
+The usefulness of Dmalloc is much increased by compiling an entire project with the header, `dmalloc.h' -- easily achieved in Sic by conditionally adding it to `common-h.in': 
+ 	
+\begin{Verbatim}[frame=single]
+BEGIN_C_DECLS
+
+#define XCALLOC(type, num)                                  \
+        ((type *) xcalloc ((num), sizeof(type)))
+#define XMALLOC(type, num)                                  \
+        ((type *) xmalloc ((num) * sizeof(type)))
+#define XREALLOC(type, p, num)                              \
+        ((type *) xrealloc ((p), (num) * sizeof(type)))
+#define XFREE(stale)                    do {                \
+        if (stale) { free ((void *) stale);  stale = 0; }   \
+                                        } while (0)
+
+extern void *xcalloc          (size_t num, size_t size);
+extern void *xmalloc          (size_t num);
+extern void *xrealloc         (void *p, size_t num);
+extern char *xstrdup          (const char *string);
+
+END_C_DECLS
+
+#if WITH_DMALLOC
+#  include <dmalloc.h>
+#endif
+\end{Verbatim}
+
+I have been careful to include the `dmalloc.h' header from the end of this 
+file so that it overrides my own definitions without renaming the function 
+prototypes. Similarly I must be careful to accomodate Dmalloc's redefinition 
+of the mallocation routines in `sic/xmalloc.c' and `sic/xstrdup.c', by 
+putting each file inside an `\#ifndef WITH\_{}DMALLOC'. That way, when 
+compiling the project, if `\verb+--with-dmalloc+' is specified and 
+the `WITH\_{}DMALLOC' preprocessor symbol is defined, then Dmalloc's debugging definitions of xstrdup et. al. will be used in place of the versions I wrote.
+
+Enabling Dmalloc is now simply a matter of reconfiguring the whole package 
+using the `\verb+--with-dmalloc+' option, and disabling it again is a matter of recofiguring without that option.
+
+The use of Dmalloc is beyond the scope of this book, and is in any case described very well in the documentation that comes with the package. I strongly recommend you become familiar with it -- the time you invest here will pay dividends many times over in the time you save debugging.
+
+This chapter completes the description of the Sic library project, and indeed tis part of the book. All of the infrastructure for building an advanced command line shell is in place now -- you need only add the builtin and syntax function definitions to create a complete shell of your own.
+
+Each of the chapters in the next part of the book explores a more specialised application of the GNU Autotools, starting with a discussion of M4, a major part of the implementation of Autoconf. 
+ 	
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

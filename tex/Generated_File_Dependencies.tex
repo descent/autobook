@@ -1,0 +1,165 @@
+\chapter{Generated File Dependencies}
+
+These diagrams show the data flows associated with each of the tools you might need to use when bootstrapping a project with GNU Autotools. A lot of files are consumed and produced by these tools, and it is important that all of the required input files are present (and correct) at each stage -- configure requires `Makefile.in' and produces `Makefile' for example. There are many of these relationships, and these diagrams should help you to visualize the dependencies. They will be invaluable while you learn your way around GNU Autotools, but before long you will find that you need to refer to them rarely, if at all.
+
+They do not show how the individual files are laid out in a project directory tree, since some of them, `config.guess' for example, have no single place at which they must appear, and others, `Makefile.am' for example, may be present in several places, depending on how you want to structure your project directories.
+
+The key to the diagrams in this appendix follows: 
+
+\begin{itemize}
+\item The boxes are the individual tools which comprise GNU Autotools.
+\item Where multiple interlinked boxes appear in a single diagram, this represents one tool itself running other helper programs. If a box is behind another box, it is a (group of) helper program(s) that may be automatically run by the boxes in front.
+\item Dotted arrows are for optional files, which may be a part of the process.
+\item Where an input arrow and output arrow are aligned horizontally, the output is created from the input by the process between the two.
+\item words in parentheses, "()", are for deprecated files which are supported but no longer necessary.
+\end{itemize}
+
+Notice that in some cases, a file ouput during one stage of the whole process becomes the driver for a subsequent stage.
+
+Each of the following diagrams represents the execution of one of the tools in GNU Autotools; they are presented in the order that we recommend you run them, though some stages may not be required for your project. You shouldn't run libtoolize if your project doesn't use libtool, for example. 
+
+\section{aclocal}
+
+The aclocal program creates the file `aclocal.m4' by combining stock installed macros, user defined macros and the contents of `acinclude.m4' to define all of the macros required by `configure.in' in a single file. aclocal was created as a fix for some missing functionality in Autoconf, and as such we consider it a wart. In due course aclocal itself will disappear, and Autoconf will perform the same function unaided.
+
+ 	
+\begin{verbatim}
+user input files   optional input     process          output files
+================   ==============     =======          ============
+
+                    acinclude.m4 - - - - -.
+                                          V
+                                      .-------,
+configure.in ------------------------>|aclocal|
+                 {user macro files} ->|       |------> aclocal.m4
+                                      `-------'
+
+\end{verbatim}
+
+\section{autoheader}
+
+autoheader runs m4 over `configure.in', but with key macros defined differently than when autoconf is executed, such that suitable cpp definitions are output to `config.h.in'.
+
+\newpage 	
+
+\begin{verbatim}
+user input files    optional input     process          output files
+================    ==============     =======          ============
+
+                    aclocal.m4 - - - - - - - .
+                    (acconfig.h) - - - -.    |
+                                        V    V
+                                     .----------,
+configure.in ----------------------->|autoheader|----> config.h.in
+                                     `----------'
+\end{verbatim}
+
+
+\section{automake and libtoolize}
+
+automake will call libtoolize to generate some extra files if the 
+macro `AC\_{}PROG\_{}LIBTOOL' is used in `configure.in'. If it is not 
+present then automake will install `config.guess' and `config.sub' by itself.
+
+libtoolize can also be run manually if desired; automake will only run libtoolize automatically if `ltmain.sh' and `ltconfig' are missing. 
+
+\begin{verbatim}
+user input files   optional input   processes          output files
+================   ==============   =========          ============
+
+                                     .--------,
+                                     |        | - - -> COPYING
+                                     |        | - - -> INSTALL
+                                     |        |------> install-sh
+                                     |        |------> missing
+                                     |automake|------> mkinstalldirs
+configure.in ----------------------->|        |
+Makefile.am  ----------------------->|        |------> Makefile.in
+                                     |        |------> stamp-h.in
+                                 .---+        | - - -> config.guess
+                                 |   |        | - - -> config.sub
+                                 |   `------+-'
+                                 |          | - - - -> config.guess
+                                 |libtoolize| - - - -> config.sub
+                                 |          |--------> ltmain.sh
+                                 |          |--------> ltconfig
+                                 `----------'
+\end{verbatim}
+
+The versions of `config.guess' and `config.sub' installed differ between releases of Automake and Libtool, and might be different depending on whether libtoolize is used to install them or not. Before releasing your own package you should get the latest versions of these files from ftp://ftp.gnu.org/gnu/config, in case there have been changes since releases of the GNU Autotools.
+
+\section{autoconf}
+
+autoconf expands the m4 macros in `configure.in', perhaps using macro definitions from `aclocal.m4', to generate the configure script.
+
+ 	
+
+\begin{verbatim}
+user input files   optional input   processes          output files
+================   ==============   =========          ============
+
+                   aclocal.m4 - - - - - -.
+                                         V
+                                     .--------,
+configure.in ----------------------->|autoconf|------> configure
+                                     `--------'
+
+\end{verbatim}
+
+\section{configure}
+
+The purpose of the preceding processes was to create the input files necessary for configure to run correctly. You would ship your project with the generated script and the files in columns, other input and processes (except `config.cache'), but configure is designed to be run by the person installing your package. Naturally, you will run it too while you develop your project, but the files it produces are specific to your development machine, and are not shipped with your package -- the person installing it later will run configure and generate output files specific to their own machine.
+
+Running the configure script on the build host executes the various tests originally specified by the `configure.in' file, and then creates another script, `config.status'. This new script generates the `config.h' header file from `config.h.in', and `Makefile's from the named `Makefile.in's. Once `config.status' has been created, it can be executed by itself to regenerate files without rerunning all the tests. Additionally, if `AC\_{}PROG\_{}LIBTOOL' was used, then ltconfig is used to generate a libtool script. 
+
+\newpage 	
+
+\begin{verbatim}
+user input files   other input      processes          output files
+================   ===========      =========          ============
+
+                                     .---------,
+                   config.site - - ->|         |
+                  config.cache - - ->|configure| - - -> config.cache
+                                     |         +-,
+                                     `-+-------' |
+                                       |         |----> config.status
+                   config.h.in ------->|config-  |----> config.h
+                   Makefile.in ------->|  .status|----> Makefile
+                                       |         |----> stamp-h
+                                       |         +--,
+                                     .-+         |  |
+                                     | `------+--'  |
+                   ltmain.sh ------->|ltconfig|-------> libtool
+                                     |        |     |
+                                     `-+------'     |
+                                       |config.guess|
+                                       | config.sub |
+                                       `------------'
+
+\end{verbatim}
+
+\section{make}
+
+The final tool to be run is make. Like configure, it is designed to execute on the build host. make will use the rules in the generated `Makefile' to compile the project sources with the aid of various other scripts generated earlier on.
+
+ 	
+\newpage 	
+
+\begin{verbatim}
+user input files   other input      processes          output files
+================   ===========      =========          ============
+
+                                   .--------,
+                   Makefile ------>|        |
+                   config.h ------>|  make  |
+{project sources} ---------------->|        |--------> {project targets}
+                                 .-+        +--,
+                                 | `--------'  |
+                                 |   libtool   |
+                                 |   missing   |
+                                 |  install-sh |
+                                 |mkinstalldirs|
+                                 `-------------'
+
+\end{verbatim}

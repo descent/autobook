@@ -1,0 +1,680 @@
+\chapter{A Large GNU Autotools Project}\label{C_A_Large_GNU_Autotools_Project}
+
+
+This chapter develops the worked example described in 9. A Small GNU Autotools Project. Again, the example is heavily colored by my own views, and there certainly are other, very different, but equally valid ways of achieving the same objectives. 
+
+
+I will explain how I incorporated libtool into the Sic project, and how to put the project documentation and test suite under the control of GNU Autotools. I pointed out some problems with the project when I first introduced it -- this chapter will address those issues, and present my favored solution to each. 
+
+\section{Using Libtool Libraries}
+
+
+As you have seen, It is very easy to convert automake built static libraries to automake built Libtool libraries. In order to build `libsic' as a Libtool library, I have changed the name of the library from `libsic.a' (the old archive name in Libtool terminology) to `libsic.la' (the pseudo-library), and must use the LTLIBRARIES Automake primary: 
+
+\begin{Verbatim}[frame=single]
+lib_LTLIBRARIES     = libsic.la
+libsic_la_LIBADD    = $(top_builddir)/replace/libreplace.la
+libsic_la_SOURCES   = builtin.c error.c eval.c list.c sic.c \
+                    syntax.c xmalloc.c xstrdup.c xstrerror.c
+\end{Verbatim}
+
+Notice the `la' in libsic\_{}la\_{}SOURCES is new too. 
+
+It is similarly easy to take advantage of Libtool convenience libraries. For the purposes of Sic, `libreplace' is an ideal candidate for this treatment -- I can create the library as a separate entity from selected sources in their own directory, and add those objects to `libsic'. This technique ensures that the installed library has all of the support functions it needs without having to link `libreplace' as a separate object. 
+
+
+In `replace/Makefile.am', I have again changed the name of the library from
+ `libreplace.a' to `libreplace.la', and changed the automake primary from `LIBRARIES' to `LTLIBRARIES'. Unfortunately, those changes alone are insufficient. Libtool libraries are compiled from Libtool objects (which have the `.lo' suffix), so I cannot use `LIBOBJS' which is a list of `.o' suffixed objects(22). See section 11.1.2 Extra Macros for Libtool, for more details. Here is `replace/Makefile.am': 
+
+\begin{Verbatim}[frame=single]
+MAINTAINERCLEANFILES    = Makefile.in
+
+noinst_LTLIBRARIES      = libreplace.la
+libreplace_la_SOURCES   = 
+libreplace_la_LIBADD    = @LTLIBOBJS@
+\end{Verbatim}
+
+And not forgetting to set and use the `LTLIBOBJS' configure substitution (see section 11.1.2 Extra Macros for Libtool): 
+
+\begin{Verbatim}[frame=single]
+Xsed="sed -e s/^X//"
+LTLIBOBJS=echo X"$LIBOBJS" | \
+    [$Xsed -e s,\.[^.]* ,.lo ,g;s,\.[^.]*$,.lo,']
+AC_SUBST(LTLIBOBJS)
+\end{Verbatim}
+
+As a consequence of using libtool to build the project libraries, the increasing number of configuration files being added to the `config' directory will grow to include `ltconfig' and `ltmain.sh'. These files will be used on the installer's machine when Sic is configured, so it is important to distribute them. The naive way to do it is to give the `config' directory a `Makefile.am' of its own; however, it is not too difficult to distribute these files from the top `Makefile.am', and it saves clutter, as you can see here: 
+
+\begin{Verbatim}[frame=single]
+AUX_DIST                = $(ac_aux_dir)/config.guess \
+                        $(ac_aux_dir)/config.sub \
+                        $(ac_aux_dir)/install-sh \
+                        $(ac_aux_dir)/ltconfig \
+                        $(ac_aux_dir)/ltmain.sh \
+                        $(ac_aux_dir)/mdate-sh \
+                        $(ac_aux_dir)/missing \
+                        $(ac_aux_dir)/mkinstalldirs
+AUX_DIST_EXTRA          = $(ac_aux_dir)/readline.m4 \
+                        $(ac_aux_dir)/sys_errlist.m4 \
+                        $(ac_aux_dir)/sys_siglist.m4
+EXTRA_DIST                = bootstrap
+
+MAINTAINERCLEANFILES         = Makefile.in aclocal.m4 \
+          configure config-h.in stamp-h.in $(AUX_DIST)
+
+dist-hook:
+        (cd $(distdir) && mkdir $(ac_aux_dir))
+        for file in $(AUX_DIST) $(AUX_DIST_EXTRA); do \
+          cp $$file $(distdir)/$$file; \
+        done
+\end{Verbatim}
+
+The `dist-hook' rule is used to make sure the `config' directory and the files it contains are correctly added to the distribution by the `make dist' rules, see section 13.1 Introduction to Distributions. 
+
+
+I have been careful to use the configure script's location for ac\_{}aux\_{}dir, so that it is defined (and can be changed) in only one place. This is achieved by adding the following macro to `configure.in': 
+
+
+\begin{Verbatim}[frame=single]
+AC_SUBST(ac_aux_dir)
+\end{Verbatim}
+
+There is no need to explicity set a macro in the `Makefile.am', because Automake automatically creates macros for every value that you `AC\_{}SUBST' from `configure.in'. 
+
+
+I have also added the AC\_{}PROG\_{}LIBTOOL macro to `configure.in' in place of AC\_{}PROG\_{}RANLIB as described in 11. Using GNU Libtool with `configure.in' and `Makefile.am'. 
+
+
+Now I can upgrade the configury to use libtool -- the greater part of this is running the libtoolize script that comes with the Libtool distribution. The bootstrap script then needs to be updated to run libtoolize at the correct juncture: 
+
+\begin{Verbatim}[frame=single]
+#! /bin/sh
+
+set -x
+aclocal -I config
+libtoolize --force --copy
+autoheader
+automake --add-missing --copy
+autoconf
+\end{Verbatim}
+
+Now I can re-bootstrap the entire project so that it can make use of libtool: 
+
+\begin{Verbatim}[frame=single]
+$ ./bootstrap
++ aclocal -I config
++ libtoolize --force --copy
+Putting files in AC_CONFIG_AUX_DIR, config.
++ autoheader
++ automake --add-missing --copy
+automake: configure.in: installing config/install-sh
+automake: configure.in: installing config/mkinstalldirs
+automake: configure.in: installing config/missing
++ autoconf
+\end{Verbatim}
+
+The new macros are evident by the new output seen when the newly regenerated configure script is executed:
+
+\begin{Verbatim}[frame=single]
+$ ./configure --with-readline
+...
+checking host system type... i586-pc-linux-gnu
+checking build system type... i586-pc-linux-gnu
+checking for ld used by GCC... /usr/bin/ld
+checking if the linker (/usr/bin/ld) is GNU ld... yes
+checking for /usr/bin/ld option to reload object files... -r
+checking for BSD-compatible nm... /usr/bin/nm -B
+checking whether ln -s works... yes
+checking how to recognise dependent libraries... pass_all
+checking for object suffix... o
+checking for executable suffix... no
+checking for ranlib... ranlib
+checking for strip... strip
+...
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+creating libtool
+...
+$ make
+...
+gcc -g -O2 -o .libs/sic sic.o sic_builtin.o sic_repl.o \
+sic_syntax.o ../sic/.libs/libsic.so -lreadline \
+-Wl,--rpath -Wl,/usr/local/lib
+creating sic
+...
+$ src/sic
+] libtool --mode=execute ldd src/sic
+    libsic.so.0 => /tmp/sic/sic/.libs/libsic.so.0 (0x40014000)
+    libreadline.so.4 => /lib/libreadline.so.4 (0x4001e000)
+    libc.so.6 => /lib/libc.so.6 (0x40043000)
+    libncurses.so.5 => /lib/libncurses.so.5 (0x40121000)
+    /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
+] exit
+$
+\end{Verbatim}
+
+As you can see, sic is now linked against a shared library build of `libsic', but not directly against the convenience library, `libreplace'.
+
+\section{Removing `--foreign'}
+
+
+Now that I have the bulk of the project in place, I want it to adhere to the GNU standard layout. By removing the `--foreign' option from the call to automake in the bootstrap file, automake is able to warn me about missing, or in some cases(23), malformed files, as follows:
+
+\begin{Verbatim}[frame=single]
+$ ./bootstrap
++ aclocal -I config
++ libtoolize --force --copy
+Putting files in AC_CONFIG_AUX_DIR, config.
++ autoheader
++ automake --add-missing --copy
+automake: Makefile.am: required file ./NEWS not found
+automake: Makefile.am: required file ./README not found
+automake: Makefile.am: required file ./AUTHORS not found
+automake: Makefile.am: required file ./THANKS not found
++ autoconf
+\end{Verbatim}
+
+The GNU standards book(24) describes the contents of these files in more detail.
+Alternatively, take a look at a few other GNU packages from 
+ftp://ftp.gnu.org/gnu. 
+
+\section{Installing Header Files}
+
+
+One of the more difficult problems with GNU Autotools driven projects is that 
+each of them depends on `config.h' (or its equivalent) and the project 
+specific symbols that it defines. The purpose of this file is to be \#included from all of the project source files. The preprocessor can tailor then the code in these files to the target environment. 
+
+It is often difficult and sometimes impossible to not introduce a dependency on `config.h' from one of the project's installable header files. It would be nice if you could simply install the generated `config.h', but even if you name it carefully or install it to a subdirectory to avoid filename problems, the macros it defines will clash with those from any other GNU Autotools based project which also installs its `config.h'. 
+
+
+For example, if Sic installed its `config.h' as `/usr/include/sic/config.h',
+and had `\verb+#include <sic/config.h>+' in the installed `common.h', when 
+another GNU Autotools based project came to use the Sic library it might begin 
+like this: 
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
+#if HAVE_SIC_H
+#  include <sic.h>
+#endif
+
+static const char version_number[] = VERSION;
+\end{Verbatim}
+
+But, `sic.h' says `\verb+#include <sic/common.h>+', which in turn says \\
+`\verb+#include <sic/config.h>+'. Even though the other project has 
+the correct
+value for `VERSION' in its own `config.h', by the time the preprocessor
+reaches the `version\_{}number' definition, it has been redefined to the 
+value in `sic/config.h'. Imagine the mess you could get into if you were using 
+several libraries which each installed their own `config.h' definitions. GCC issues a warning when a macro is redefined to a different value which would help you to catch this error. Some compilers do not issue a warning, and perhaps worse, other compilers will warn even if the repeated definitions have the same value, flooding you with hundreds of warnings for each source file that reads multiple `config.h' headers.
+
+    The Autoconf macro AC\_{}OUTPUT\_{}COMMANDS(25) provides a way to solve this problem. The idea is to generate a system specific but installable header from the results of the various tests performed by configure. There is a 1-to-1 mapping between the preprocessor code that relied on the configure results written to `config.h', and the new shell code that relies on the configure results saved in `config.cache'.
+
+The following code is a snippet from `configure.in', in the body of the AC\_{}OUTPUT\_{}COMMANDS macro: 
+
+\begin{Verbatim}[frame=single]
+# Add the code to include these headers only if autoconf has
+# shown them to be present.
+    if test x$ac_cv_header_stdlib_h = xyes; then
+      echo '#include <stdlib.h>' >> $tmpfile
+    fi
+    if test x$ac_cv_header_unistd_h = xyes; then
+      echo '#include <unistd.h>' >> $tmpfile
+    fi
+    if test x$ac_cv_header_sys_wait_h = xyes; then
+      echo '#include <sys/wait.h>' >> $tmpfile
+    fi
+    if test x$ac_cv_header_errno_h = xyes; then
+      echo '#include <errno.h>' >> $tmpfile
+    fi
+    cat >> $tmpfile << '_EOF_'
+#ifndef errno
+/* Some sytems #define this! */
+extern int errno;
+#endif
+_EOF_
+    if test x$ac_cv_header_string_h = xyes; then
+      echo '#include <string.h>' >> $tmpfile
+    elif test x$ac_cv_header_strings_h = xyes; then
+      echo '#include <strings.h>' >> $tmpfile
+    fi
+    if test x$ac_cv_header_assert_h = xyes; then
+      cat >> $tmpfile << '_EOF_'
+
+#include <assert.h>
+#define SIC_ASSERT assert
+
+_EOF_
+  else
+     echo '#define SIC_ASSERT(expr)  ((void) 0)' >> $tmpfile
+    fi
+\end{Verbatim}
+
+Compare this with the equivalent C pre-processor code from `sic/common.h', which it replaces:
+
+ 	
+\begin{Verbatim}[frame=single]
+#if STDC_HEADERS || HAVE_STDLIB_H
+#  include <stdlib.h>
+#endif
+
+#if HAVE_UNISTD_H
+#  include <unistd.h>
+#endif
+
+#if HAVE_SYS_WAIT_H
+#  include <sys/wait.h>
+#endif
+
+#if HAVE_ERRNO_H
+#  include <errno.h>
+#endif
+#ifndef errno
+/* Some systems #define this! */
+extern int errno;
+#endif
+
+#if HAVE_STRING_H
+#  include <string.h>
+#else
+#  if HAVE_STRING_H
+#    include <strings.h>
+#  endif
+#endif
+
+#if HAVE_ASSERT_H
+#  include <assert.h>
+#  define SIC_ASSERT assert
+#else
+#  define SIC_ASSERT(expr) ((void) 0)
+#endif
+\end{Verbatim}
+
+Apart from the mechanical process of translating the preprocessor code, there is some plumbing needed to ensure that the `common.h' file generated by the new code in `configure.in' is functionally equivalent to the old code, and is generated in a correct and timely fashion.
+
+Taking my lead from some of the Automake generated make rules to regenerate `Makefile' from `Makefile.in' by calling `config.status', I have added some similar rules to `sic/Makefile.am' to regenerate `common.h' from `common-h.in'. 
+
+\begin{Verbatim}[frame=single]
+# Regenerate common.h with config.status 
+# whenever common-h.in changes.
+common.h: stamp-common
+        @:
+stamp-common: $(srcdir)/common-h.in \
+               $(top_builddir)/config.status
+ cd $(top_builddir) \
+  && CONFIG_FILES= CONFIG_HEADERS= CONFIG_OTHER=sic/common.h \
+  $(SHELL) ./config.status
+ echo timestamp > $@
+\end{Verbatim}
+
+The way that AC\_{}OUTPUT\_{}COMMANDS works, is to copy the contained code into config.status (see section C. Generated File Dependencies). It is actually config.status that creates the generated files -- for example, automake generated
+`Makefile's are able to regenerate themselves from corresponding `Makefile.in's by calling config.status if they become out of date. Unfortunately, this means that config.status doesn't have direct access to the cache values generated while configure was running (because it has finished its work by the time config.status is called). It is tempting to read in the cache file at the top of the code inside AC\_{}OUTPUT\_{}COMMANDS, but that only works if you know where the cache file is saved. Also the package installer can use the `--cache-file' option of configure to change the location of the file, or turn off caching entirely with `--cache-file=/dev/null'.
+
+AC\_{}OUTPUT\_{}COMMANDS accepts a second argument which can be used to pass 
+the variable settings discovered by configure into config.status. It's not 
+pretty, and is a little error prone. In the first argument to \\
+AC\_{}OUTPUT\_{}COMMANDS, you must be careful to check that every single configure variable referenced is correctly set somewhere in the second argument.
+
+A slightly stripped down example from the sic project `configure.in' looks like this: 
+
+\begin{Verbatim}[frame=single]
+# -------------------------------------------------------
+# Add code to config.status to create an installable host 
+# dependent configuration file.
+# -------------------------------------------------------
+AC_OUTPUT_COMMANDS([
+ if test -n "$CONFIG_FILES" && test -n "$CONFIG_HEADERS"; 
+ then
+  # If both these vars are non-empty, then config.status 
+  # wasn't run by automake rules 
+  #(which always set one or the other to empty).
+  CONFIG_OTHER=${CONFIG_OTHER-sic/common.h}
+  fi
+  case "$CONFIG_OTHER" in
+  *sic/common.h*)
+    outfile=sic/common.h
+    stampfile=sic/stamp-common
+    tmpfile=${outfile}T
+    dirname="sed s,^.*/,,g"
+
+    echo creating $outfile
+    cat > $tmpfile << _EOF_
+/*  -*- Mode: C -*-
+ * -----------------------------------------------------------
+ * DO NOT EDIT THIS FILE!  It has been automatically generated
+ * from:    configure.in and `echo $outfile|$dirname`.in
+ * on host: `(hostname || uname -n) 2>/dev/null | sed 1q`
+ * -----------------------------------------------------------
+ */
+
+#ifndef SIC_COMMON_H
+#define SIC_COMMON_H 1
+
+#include <stdio.h>
+#include <sys/types.h>
+_EOF_
+
+    if test x$ac_cv_func_bzero = xno && \
+       test x$ac_cv_func_memset = xyes; then
+      cat >> $tmpfile << '_EOF_'
+#define bzero(buf, bytes) ((void) memset (buf, 0, bytes))
+_EOF_
+    fi
+    if test x$ac_cv_func_strchr = xno; then
+      echo '#define strchr index' >> $tmpfile
+    fi
+    if test x$ac_cv_func_strrchr = xno; then
+      echo '#define strrchr rindex' >> $tmpfile
+    fi
+
+    # The ugly but portable cpp stuff comes from here
+    infile=$srcdir/sic/`echo $outfile | \
+    sed 's,.*/,,g;s,\..*$,,g'`-h.in
+    sed '/^##.*$/d' $infile >> $tmpfile 
+
+],[
+  srcdir=$srcdir
+  ac_cv_func_bzero=$ac_cv_func_bzero
+  ac_cv_func_memset=$ac_cv_func_memset
+  ac_cv_func_strchr=$ac_cv_func_strchr
+  ac_cv_func_strrchr=$ac_cv_func_strrchr
+])
+\end{Verbatim}
+
+You will notice that the contents of `common-h.in' are copied into `common.h' verbatim as it is generated. It's just an easy way of collecting together the code that belongs in `common.h', but which doesn't rely on configuration tests, without cluttering `configure.in' any more than necessary.
+
+I should point out that, although this method has served me well for a number of years now, it is inherently fragile because it relies on undocumented internals of both Autoconf and Automake. There is a very real possibility that if you also track the latest releases of GNU Autotools, it may stop working. Future releases of GNU Autotools will address the interface problems that force us to use code like this, for the lack of a better way to do things. 
+
+\section{Including Texinfo Documentation}
+Automake provides a few facilities to make the maintenance of Texinfo documentation within projects much simpler than it used to be. Writing a `Makefile.am' for Texinfo documentation is extremely straightforward:
+
+\begin{Verbatim}[frame=single]
+## Process this file with automake to produce Makefile.in
+
+MAINTAINERCLEANFILES    = Makefile.in
+info_TEXINFOS           = sic.texi
+\end{Verbatim}
+
+The `TEXINFOS' primary will not only create rules for generating `.info' files suitable for browsing with the GNU info reader, but also for generating `.dvi' and `.ps' documentation for printing.
+
+You can also create other formats of documentation by adding the appropriate make rules to `Makefile.am'. For example, because the more recent Texinfo distributions have begun to support generation of HTML documentation from the `.texi' format master document, I have added the appropriate rules to the `Makefile.am': 
+
+\begin{Verbatim}[frame=single]
+SUFFIXES                = .html
+
+html_docs               = sic.html
+
+.texi.html:
+        $(MAKEINFO) --html $<
+
+.PHONY: html
+html: version.texi $(html_docs)
+\end{Verbatim}
+
+For ease of maintenance, these make rules employ a suffix rule which describes how to generate HTML from equivalent `.texi' source -- this involves telling make about the `.html' suffix using the automake SUFFIXES macro. I haven't defined `MAKEINFO' explicitly (though I could have done) because I know that Automake has already defined it for use in the `.info' generation rules.
+
+The `html' target is for convenience; typing `make html' is a little easier than typng `make sic.html'. I have also added a .PHONY target so that featureful make programs will know that the `html' target doesn't actually generate a file called literally, `html'. As it stands, this code is not quite complete, since the toplevel `Makefile.am' doesn't know how to call the `html' rule in the `doc' subdirectory.
+
+There is no need to provide a general solution here in the way Automake does for its `dvi' target, for example. A simple recursive call to `doc/Makefile' is much simpler: 
+
+\begin{Verbatim}[frame=single]
+docdir                        = $(top_builddir)/doc
+
+html:
+        @echo Making $@ in $(docdir)
+        @cd $(docdir) && make $@
+\end{Verbatim}
+
+Another useful management function that Automake can perform for you with respect to Texinfo documentation is to automatically generate the version numbers for your Texinfo documents. It will add make rules to generate a suitable `version.texi', so long as automake sees `@include version.texi' in the body of the Texinfo source:
+
+\begin{Verbatim}[frame=single]
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename sic.info
+@settitle Dynamic Modular Interpreter Prototyping
+@setchapternewpage odd
+@c %**end of header
+@headings             double
+
+@include version.texi
+
+@dircategory Programming
+@direntry
+* sic:(sic). The dynamic,modular,interpreter prototyping tool.
+@end direntry
+
+@ifinfo
+This file documents sic.
+
+@end ifinfo
+
+@titlepage
+@sp 10
+@title Sic
+@subtitle Edition @value{EDITION}, @value{UPDATED}
+@subtitle $Id: sic.texi,v 1.4 2000/05/23 09:07:00 bje Exp $
+@author Gary V. Vaughan
+@author @email{gvv@@techie.com}
+
+@page
+@vskip 0pt plus 1filll
+@end titlepage
+\end{Verbatim}
+
+`version.texi' sets Texinfo variables, `VERSION', `EDITION' and `UPDATE', which can be expanded elsewhere in the main Texinfo documentation by using 
+@value$\{$EDITION$\}$ for example. This makes use of another auxiliary file,
+mdate-sh which will be added to the scripts in the \$ac\_{}aux\_{}dir subdirectory by Automake after adding the `version.texi' reference to `sic.texi':
+
+\begin{Verbatim}[frame=single]
+$ ./bootstrap
++ aclocal -I config
++ libtoolize --force --copy
+Putting files in AC_CONFIG_AUX_DIR, config.
++ autoheader
++ automake --add-missing --copy
+doc/Makefile.am:22: installing config/mdate-sh
++ autoconf
+$ make html
+/bin/sh ./config.status --recheck
+...
+Making html in ./doc
+make[1]: Entering directory /tmp/sic/doc
+Updating version.texi
+makeinfo --html sic.texi
+make[1]: Leaving directory 
+\end{Verbatim}
+
+Hopefully, it now goes without saying that I also need to add the `doc' subdirectory to `AC\_{}OUTPUT' in `configure.in' and to `SUBDIRS' in the top-level `Makefile.am'.
+
+\section{Adding a Test Suite}
+Automake has very flexible support for automated test-suites within a project distribution, which are discussed more fully in the Automake manual. I have added a simple shell script based testing facility to Sic using this support -- this kind of testing mechanism is perfectly adequate for command line projects. The tests themselves simply feed prescribed input to the uninstalled sic interpreter and compare the actual output with what is expected.
+
+Here is one of the test scripts: 
+
+\begin{Verbatim}[frame=single]
+## -*- sh -*-
+## incomplete.test -- Test incomplete command handling
+
+# Common definitions
+if test -z "$srcdir"; then
+    srcdir=echo "$0" | sed s,[^/]*$,,'
+    test "$srcdir" = "$0" && srcdir=.
+    test -z "$srcdir" && srcdir=.
+    test "${VERBOSE+set}" != set && VERBOSE=1
+fi
+. $srcdir/defs
+
+# this is the test script
+cat <<\EOF > in.sic
+echo "1
+2
+3"
+EOF
+
+# this is the output we should expect to see
+cat <<\EOF >ok
+1
+2
+3
+EOF
+
+cat <<\EOF >errok
+EOF
+
+# Run the test saving stderr to a file, and showing stdout
+# if VERBOSE == 1
+$RUNSIC in.sic  2> err | tee -i out >&2
+
+# Test against expected output
+if ${CMP} -s out ok; then
+    :
+else
+    echo "ok:" >&2
+    cat ok >&2
+    exit 1
+fi
+
+# Munge error output to remove leading directories, `lt-' or
+# trailing `.exe'
+sed -e "s,^[^:]*[lt-]*sic[.ex]*:,sic:," err >sederr && \
+mv sederr err
+
+# Show stderr if doesnt match expected output if VERBOSE == 1
+if "$CMP" -s err errok; then
+    :
+else
+    echo "err:" >&2
+    cat err >&2
+    echo "errok:" >&2
+    cat errok >&2
+    exit 1
+fi
+\end{Verbatim}
+
+The tricky part of this script is the first part which discovers the location 
+of (and loads) `\$srcdir/defs'. It is a little convoluted because it needs to work if the user has compiled the project in a separate build tree -- in which case the `defs' file is in a separate source tree and not in the actual directory in which the test is executed.
+
+The `defs' file allows me to factor out the common definitions from each of the test files so that it can be maintained once in a single file that is read by all of the tests: 
+
+\begin{Verbatim}[frame=single]
+#! /bin/sh
+
+# Make sure srcdir is an absolute path.  Supply the variable
+# if it does not exist.  We want to be able to run the tests
+# stand-alone!!
+#
+srcdir=${srcdir-.}
+if test ! -d $srcdir ; then
+    echo "defs: installation error" 1>&2
+    exit 1
+fi
+
+#  IF the source directory is a Unix or a DOS root directory,
+#  ...
+
+case "$srcdir" in
+    /* | [A-Za-z]:\\*) ;;
+    *) srcdir=`\cd $srcdir && pwd` ;;
+esac
+
+case "$top_builddir" in
+    /* | [A-Za-z]:\\*) ;;
+    *) top_builddir=`\cd ${top_builddir-..} && pwd` ;;
+esac
+
+progname=`echo "$0" | sed 's,^.*/,,'`
+testname=`echo "$progname" | sed 's,-.*$,,'`
+testsubdir=${testsubdir-testSubDir}
+
+SIC_MODULE_PATH=$top_builddir/modules
+export SIC_MODULE_PATH
+
+# User can set VERBOSE to prevent output redirection
+case x$VERBOSE in
+    xNO | xno | x0 | x)
+        exec > /dev/null 2>&1
+        ;;
+esac
+
+rm -rf $testsubdir > /dev/null 2>&1
+mkdir $testsubdir
+cd $testsubdir \
+ || { echo "Cannot make or change into $testsubdir"; exit 1; }
+
+echo "=== Running test $progname"
+
+CMP="${CMP-cmp}"
+RUNSIC="${top_builddir}/src/sic"
+\end{Verbatim}
+
+Having written a few more test scripts, and made sure that they are working by running them from the command line, all that remains is to write a suitable `Makefile.am' so that automake can run the test suite automatically.
+
+\begin{Verbatim}[frame=single]
+## Makefile.am -- Process this file with automake to produce 
+# Makefile.in
+
+EXTRA_DIST              = defs $(TESTS)
+MAINTAINERCLEANFILES    = Makefile.in
+
+testsubdir              = testSubDir
+
+TESTS_ENVIRONMENT       = top_builddir=$(top_builddir)
+
+TESTS                   =                       \
+                        empty-eval.test         \
+                        empty-eval-2.test       \
+                        empty-eval-3.test       \
+                        incomplete.test         \
+                        multicmd.test
+
+distclean-local:
+        -rm -rf $(testsubdir)
+\end{Verbatim}
+
+I have used the `testsubdir' macro to run the tests in their own subdirectory so that the directory containing the actual test scripts is not polluted with lots of fallout files generated by running the tests. For completeness I have used a hook target(26) to remove this subdirectory when the user types:
+
+\begin{Verbatim}[frame=single]
+$ make distclean
+...
+rm -rf testSubDir
+...
+\end{Verbatim}
+
+Adding more tests is accomplished by creating a new test script and adding it to the list in noinst\_{}SCRIPTS. Remembering to add the new `tests' subdirectory to `configure.in' and the top-level `Makefile.am', and reconfiguring the project to propogate the changes into the various generated files, I can run the whole test suite from the top directory with:
+
+\begin{Verbatim}[frame=single]
+$ make check
+\end{Verbatim}
+
+It is often useful run tests in isolation, either when developing new tests, or to examine more closely why a test has failed unexpectedly. Having set this test suite up as I did, individual tests can be executed with:
+
+\begin{Verbatim}[frame=single]
+$ VERBOSE=1 make check TESTS=incomplete.test
+make  check-TESTS
+make[1]: Entering directory
+/tmp/sic/tests
+=== Running test incomplete.test
+1
+2
+3
+PASS: incomplete.test
+==================
+All 1 tests passed
+==================
+make[1]: Leaving directory /tmp/sic/tests
+$ ls testSubDir/
+err   errok   in.sic   ok   out
+\end{Verbatim}
+
+The `testSubDir' subdirectory now contains the expected and actual output from that particular test for both `stdout' and `stderr', and the input file which generated the actual output. Had the test failed, I would be able to look at these files to decide whether there is a bug in the program or simply a bug in the test script. Being able to examine individual tests like this is invaluable, especially when the test suite becomes very large -- because you will, naturally, add tests every time you add features to a project or find and fix a bug.
+
+Another alternative to the pure shell based test mechanism I have presented here is the Autotest facility by Fran@,cois Pinard, as used in Autoconf after release 2.13.
+
+Later in 20. A Complex GNU Autotools Project, the Sic project will be revisited to take advantage of some of the more advanced features of GNU Autotools. But first these advanced features will be discussed in the next several chapters -- starting, in the next chapter, with a discussion of how GNU Autotools can help you to make a tarred distribution of your own projects. 
+

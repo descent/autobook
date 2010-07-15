@@ -1,0 +1,117 @@
+\chapter{Advanced GNU Automake Usage}\label{C_Advanced_GNU_Automake_Usage}
+
+This chapter covers a few seemingly unrelated Automake features which are commonly considered `advanced': conditionals, user-added language support, and automatic dependency tracking. 
+
+\section{Conditionals}
+
+Automake conditionals are a way to omit or include different parts of the `Makefile' depending on what configure discovers. A conditional is introduced in `configure.in' using the `AM\_{}CONDITIONAL' macro. This macro takes two arguments: the first is the name of the condition, and the second is a shell expression which returns true when the condition is true.
+
+For instance, here is how to make a condition named `TRUE' which is always true: 
+
+\begin{Verbatim}[frame=single]
+AM_CONDITIONAL(TRUE, true)
+\end{Verbatim}
+
+As another example, here is how to make a condition named `DEBUG' which is true when the user has given the `\verb+--enable-debug+' option to configure:
+
+\begin{Verbatim}[frame=single]
+AM_CONDITIONAL(DEBUG, test "$enable_debug" = yes)
+\end{Verbatim}
+
+Once you've defined a condition in `configure.in', you can refer to it in your `Makefile.am' using the `if' statement. Here is a part of a sample `Makefile.am' that uses the conditions defined above:
+
+\begin{Verbatim}[frame=single]
+if TRUE
+## This is always used.
+bin_PROGRAMS = foo
+endif
+
+if DEBUG
+AM_CFLAGS = -g -DDEBUG
+endif
+\end{Verbatim}
+
+It's important to remember that Automake conditionals are configure-time conditionals. They don't rely on any special feature of make, and there is no way for the user to affect the conditionals from the make command line. Automake conditionals work by rewriting the `Makefile' -- make is unaware that these conditionals even exist.
+
+Traditionally, Automake conditionals have been considered an advanced feature. However, practice has shown that they are often easier to use and understand than other approaches to solving the same problem. I now recommend the use of conditionals to everyone.
+
+For instance, consider this example: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = echo
+if FULL_ECHO
+echo_SOURCES = echo.c extras.c getopt.c
+else
+echo_SOURCES = echo.c
+endif
+\end{Verbatim}
+
+In this case, the equivalent code without conditionals is more confusing and correspondingly more difficult for the new Automake user to figure out:
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = echo
+echo_SOURCES = echo.c
+echo_LDADD   = @echo_extras@
+EXTRA_echo_SOURCES = extras.c getopt.c
+\end{Verbatim}
+
+Automake conditionals have some limitations. One known problem is 
+that conditionals don't interact properly with `+=' assignment. For 
+instance, consider this code:
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = z
+z_SOURCES = z.c
+if SOME_CONDITION
+z_SOURCES += cond.c
+endif
+\end{Verbatim}
+
+This code appears to have an unambiguous meaning, but Automake 1.4 doesn't implement this and will give an error. This bug will be fixed in the next major Automake release.
+
+\section{Language support}
+
+Automake comes with built-in knowledge of the most common compiled languages: C, C++, Objective C, Yacc, Lex, assembly, and Fortran. However, programs are sometimes written in an unusual language, or in a custom language that is translated into something more common. Automake lets you handle these cases in a natural way.
+
+Automake's notion of a `language' is tied to the suffix appended to each source file written in that language. You must inform Automake of each new suffix you introduce. This is done by listing them in the `SUFFIXES' macro. For instance, suppose you are writing part of your program in the language `M', which is compiled to object code by a program named mc. The typical suffix for an `M' source file is `.m'. In your `Makefile.am' you would write: 
+
+\begin{Verbatim}[frame=single]
+SUFFIXES = .m
+\end{Verbatim}
+
+This differs from ordinary make usage, where you would use the special .SUFFIX target to list suffixes.
+
+Now you need to tell Automake (and make) how to compile a `.m' file to a `.o' file. You do this by writing an ordinary make suffix rule: 
+
+\begin{Verbatim}[frame=single]
+MC = mc
+.m.o:
+        $(MC) $(MCFLAGS) $(AM_MCFLAGS) -c $<
+\end{Verbatim}
+
+Note that we introduced the `MC', `MCFLAGS', and `AM\_{}MCFLAGS' variables. While not required, this is good style in case you want to override any of these later (for instance from the command line).
+
+Automake understands enough about suffix rules to recognize that `.m' files can be treated just like any file it already understands, so now you can write: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = myprogram
+myprogram_SOURCES = foo.c something.m
+\end{Verbatim}
+
+Note that Automake does not really understand chained suffix rules; however, frequently the right thing will happen anyway. For instance, if you have a .m.c rule, Automake will naively assume that `.m' files should be turned into `.o' files -- and then it will proceed to rely on make to do the real work. In this example, if the translation takes three steps--from `.m' to `.x', then from `.x' to `.c', and finally to `.o'---then Automake's simplistic approach will break. Fortunately, these cases are very rare.
+
+\section{Automatic dependency tracking}
+
+Keeping track of dependencies for a large program is tedious and error-prone.
+Many edits require the programmer to update dependencies, but for some changes,
+such as adding a \#include to an existing header, the change is large enough 
+that he simply refuses (or does it incorrectly). To fix this problem, Automake supports automatic dependency tracking.
+
+The implementation of automatic dependency tracking in Automake 1.4 requires gcc and GNU make. These programs are only required for maintainers; the `Makefile's generated by make dist are completely portable. If you can't use gcc or GNU make for your project, then you are simply out of luck; you have to disable dependency tracking.
+
+Automake 1.5 will include a completely new dependency tracking implementation. This new implementation will work with any compiler and any version of make.
+
+Another limitation of the current scheme is that the dependencies included into the portable `Makefile's by make dist are derived from the current build environment. First, this means that you must use make all before you can meaningfully run make dist (otherwise the dependencies won't have been created). Second, this means that any files not built in your current tree will not have dependencies in the distributed `Makefile's. The new implementation will avoid both of these shortcomings as well.
+
+Automatic dependency tracking is on by default; you don't have to do anything special to get it. To turn it off, either run automake -i instead of plain automake, or put `no-dependencies' into the `AUTOMAKE\_{}OPTIONS' macro in each `Makefile.am'. 
+

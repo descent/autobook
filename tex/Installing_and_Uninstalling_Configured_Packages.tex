@@ -1,0 +1,227 @@
+\chapter{Installing and Uninstalling Configured Packages}
+
+Have you ever seen a package where, once built, you were expected to keep the build tree around forever, and always cd there before running the tool? You might have to cast your mind way, way back to the bad old days of 1988 to remember such a horrible thing.
+
+The GNU Autotools provides a canned solution to this problem. While not without flaws, it does provide a reasonable and easy-to-use framework. In this chapter we discuss how the GNU Autotools installation model, how to convince automake to install files where you want them, and finally we conclude with some information about uninstalling, including a brief discussion of its flaws. 
+
+\section{Where files are installed}
+
+If you've ever run configure --help, you've probably been frightened by the huge number of options offered. Although nobody ever uses more than two or three of these, they are still important to understand when writing your package; their proper use will help you figure out where each file should be installed. For a background on these standard directories and their uses, refer to 3. How to run configure and make.
+
+We do recommend using the standard directories as described. While most package builders only use `--prefix' or perhaps `--exec-prefix', some packages (eg. GNU/Linux distributions) require more control. For instance, if your package `quux' puts a file into sysconfigdir, then in the default configuration it will end up in `/usr/local/var'. However, for a GNU/Linux distribution it would make more sense to configure with `--sysconfigdir=/var/quux'.
+
+Automake makes it very easy to use the standard directories. Each directory, such as `bindir', is mapped onto a `Makefile' variable of the same name. Automake adds three useful variables to the standard list: 
+
+\begin{description}
+\item [pkgincludedir]
+\
+
+    This is a convenience variable whose value is `$(includedir)/$(PACKAGE)'.
+
+\item[pkgdatadir]
+\
+
+    A convenience variable whose value is `$(datadir)/$(PACKAGE)'.
+
+\item[pkglibdir]
+\
+
+    A variable whose value is `$(libdir)/$(PACKAGE)'.
+\end{description}
+These cannot be set on the configure command line but are always defined as above. (29)
+
+In Automake, a directory variable's name, without the `dir' suffix, can be used as a prefix to a primary to indicate install location. Confused yet? And example will help: items listed in `bin\_{}PROGRAMS' are installed in `bindir'.
+
+Automake's rules are actually a bit more precise than this: the directory and the primary must agree. It doesn't make sense to install a library in `datadir', so Automake won't let you. Here is a complete list showing primaries and the directories which can be used with them: 
+
+\begin{description}
+\item[`PROGRAMS']
+\
+
+    `bindir', `sbindir', `libexecdir', `pkglibdir'.
+
+\item[`LIBRARIES']
+\
+
+    `libdir', `pkglibdir'.
+
+\item[`LTLIBRARIES']
+\
+
+    `libdir', `pkglibdir'.
+
+\item[`SCRIPTS']
+\
+
+    `bindir', `sbindir', `libexecdir', `pkgdatadir'.
+
+\item[`DATA']
+\
+
+    `datadir', `sysconfdir', `sharedstatedir', `localstatedir', `pkgdatadir'.
+
+\item[`HEADERS']
+\
+
+    `includedir', `oldincludedir', `pkgincludedir'.
+
+\item[`TEXINFOS']
+\
+
+    `infodir'.
+
+\item[`MANS']
+\
+
+    `man', `man0', `man1', `man2', `man3', `man4', `man5', `man6', `man7', `man8', `man9', `mann', `manl'.
+\end{description}
+
+There are two other useful prefixes which, while not directory names, can be used in their place. These prefixes are valid with any primary. The first of these is `noinst'. This prefix tells Automake that the listed objects should not be installed, but should be built anyway. For instance, you can use `noinst\_{}PROGRAMS' to list programs which will not be installed.
+
+The second such non-directory prefix is `check'. This prefix tells Automake that this object should not be installed, and furthermore that it should only be built when the user runs make check.
+
+Early in Automake history we discovered that even Automake's extended built-in list of directories was not enough -- basically anyone who had written a `Makefile.am' sent in a bug report about this. Now Automake lets you extend the list of directories.
+
+First you must define your own directory variable. This is a macro whose name ends in `dir'. Define this variable however you like. We suggest that you define it relative to an autoconf directory variable; this gives the user some control over the value. Don't hardcode it to something like `/etc'; absolute hardcoded paths are rarely portable.
+
+Now you can attach the base part of the new variable to a primary just as you can with the built-in directories: 
+
+\begin{Verbatim}[frame=single]
+foodir = $(datadir)/foo
+foo_DATA = foo.txt
+\end{Verbatim}
+
+Automake lets you attach such a variable to any primary, so you can do things 
+you ordinarily wouldn't want to do or be allowed to do. For instance, Automake 
+won't diagnose this piece of code that tries to install a program in an 
+architecture-independent location:
+
+\begin{Verbatim}[frame=single]
+foodir = $(datadir)/foo
+foo_PROGRAMS = foo
+\end{Verbatim}
+
+\section{Fine-grained control of install}
+
+The second most common way (30) to configure a package is to set prefix and exec-prefix to different values. This way, a system administrator on a heterogenous network can arrange to have the architecture-independent files shared by all platforms. Typically this doesn't save very much space, but it does make in-place bug fixing or platform-independent runtime configuration a lot easier.
+
+To this end, Automake provides finer control to the user than a simple make install. For instance, the user can strip all the package executables at install time by running make install-strip (though we recommend setting the various `INSTALL' environment variables instead; this is discussed later). More importantly, Automake provides a way to install the architecture-dependent and architecture-independent parts of a package independently.
+
+In the above scenario, installing the architecture-independent files more than once is just a waste of time. Our hypothetical administrator can install those pieces exactly once, with make install-data, and then on each type of build machine install only the architecture-dependent files with make install-exec.
+
+Nonstandard directories specified in `Makefile.am' are also separated along `data' and `exec' lines, giving the user complete control over installation. If, and only if, the directory variable name contains the string `exec', then items ending up in that directory will be installed by install-exec and not install-data.
+
+At some sites, the paths referred to by software at runtime differ from those used to actually install the software. For instance, suppose `/usr/local' is mounted read-only throughout the network. On the server, where new packages are built, the file system is available read-write as `/w/usr/local' -- a directory which is not mounted anywhere else. In this situation the sysadmin can configure and build using the runtime values, but use the `DESTDIR' trick to temporarily change the paths at install time: 
+
+\begin{Verbatim}[frame=single]
+./configure --prefix=/usr/local
+make
+make DESTDIR=/w install
+\end{Verbatim}
+
+Note that `DESTDIR' operates as a prefix only. Sometimes this isn't enough. In this situation you can explicitly override each directory variable:
+
+ 	
+\begin{Verbatim}[frame=single]
+./configure --prefix=/usr/local
+make
+make prefix=/w/usr/local datadir=/w/usr/share install
+\end{Verbatim}
+
+Here is a full example (31) showing how you can unpack, configure, and build a typical GNU program on multiple machines at the same time:
+
+\begin{Verbatim}[frame=single]
+sunos$ tar zxf foo-0.1.tar.gz
+sunos$ mkdir sunos linux
+\end{Verbatim}
+
+In one window:
+
+\begin{Verbatim}[frame=single]
+sunos$ cd sunos
+sunos$ ../foo-0.1/configure --prefix=/usr/local \
+> --exec-prefix=/usr/local/sunos
+sunos$ make
+sunos$ make install
+\end{Verbatim}
+
+And in another window:
+
+\begin{Verbatim}[frame=single]
+sunos$ rsh linux
+linux$ cd ~/linux
+linux$ ../foo-0.1/configure --prefix=/usr/local \
+> --exec-prefix=/usr/local/linux
+linux$ make
+linux$ make install-exec
+\end{Verbatim}
+
+In this example we install everything on the `sunos' machine, but we only 
+install the platform-dependent files on the `linux' machine. We use a 
+different exec-prefix, so for example GNU/Linux executables will end up 
+in `/usr/local/linux/bin/'.
+
+\section{Install hooks}
+
+As with dist, the install process allows for generic targets which can be used when the existing install functionality is not enough. There are two types of targets which can be used: local rules and hooks.
+
+A local rule is named either install-exec-local or install-data-local, and is run during the course of the normal install procedure. This rule can be used to install things in ways that Automake usually does not support.
+
+For instance, in libgcj we generate a number of header files, one per Java 
+class. We want to install them in `pkgincludedir', but we want to preserve 
+the hierarchical structure of the headers (e.g., we want `java/lang/String.h' 
+to be installed as `\$(pkgincludedir)/java/lang/String.h',
+not `\$(pkgincludedir)/String.h'), and Automake does not currently 
+support this. So we resort to a local rule, which is a bit more 
+complicated than you might expect: 
+
+\begin{Verbatim}[frame=single]
+install-data-local:
+   @for f in $(nat_headers) $(extra_headers); do \
+## Compute the install directory at runtime.
+     d="echo $$f | sed -e s,/[^/]*$$,,'"; \
+## Make the install directory.
+     $(mkinstalldirs) $(DESTDIR)$(includedir)/$$d; \
+## Find the header file -- in our case it might be in 
+## srcdir or it might be in the build directory.
+## "p" is the variable that names the actual file 
+## we will install.
+  if test -f $(srcdir)/$$f; then p=$(srcdir)/$$f;\
+  else p=$$f; fi; \
+## Actually install the file.
+   $(INSTALL_DATA) $$p $(DESTDIR)$(includedir)/$$f; \
+        done
+\end{Verbatim}
+
+A hook is guaranteed to run after the install of objects in this directory has completed. This can be used to modify files after they have been installed. There are two install hooks, named install-data-hook and install-exec-hook.
+
+For instance, suppose you have written a program which must be setuid root. You can accomplish this by changing the permissions after the program has been installed: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = su
+su_SOURCES = su.c
+
+install-exec-hook:
+        chown root $(bindir)/su
+        chmod u+s $(bindir)/su
+\end{Verbatim}
+
+Unlike an install hook, and install rule is not guaranteed to be after all other install rules are run. This lets it be run in parallel with other install rules when a parallel make is used. Ordinarily this is not very important, and in practice you almost always see local hooks and not local rules.
+
+The biggest caveat to using a local rule or an install hook is to make 
+sure that it will work when the source and build directories are not 
+the same--many people forget to do this. This means being sure to look 
+in `\$(srcdir)' when the file is a source file.
+
+It is also very important to make sure that you do not use a local rule when install order is important -- in this case, your `Makefile' will succeed on some machines and fail on others. 
+
+\section{Uninstall}
+
+As if things arent confusing enough, there is still one more major installation-related feature which we haven't mentioned: uninstall. Automake adds an uninstall target to your `Makefile' which does the reverse of install: it deletes the newly installed package.
+
+Unlike install, there is no uninstall-data or uninstall-exec; while possible in theory we don't think this would be useful enough to actually use. Like install, you can write uninstall-local or uninstall-hook rules.
+
+In our experience, uninstall is not a very useful feature. Automake implements it because it is mandated by the GNU Standards, but it doesn't work reliably across packages. Maintainers who write install hooks typically neglect to write uninstall hooks. Also, since it can't reliably uninstall a previously installed version of a package, it isn't useful for what most people would want to use it for anyway. We recommend using a real packaging system, several of which are freely available. In particular, GNU Stow, RPM, and the Debian packaging system seem like good choices. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

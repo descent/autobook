@@ -1,0 +1,333 @@
+\chapter{Writing `configure.in'}
+
+
+Writing a portable `configure.in' is a tricky business. Since you can put 
+arbitrary ({\McQ\cH211}\z{\MbQ\cH45}\z{\MbQ\cH70}\z{\MgQ\cH107}\z{\MbQ\cH237}, {\MgQ\cH115}\z{\MbQ\cH105}\z{\MbQ\cH237}) shell code into `configure.in', your options 
+seem overwhelming ({\MeQ\cH57}\z{\MdQ\cH74}\z{\MbQ\cH237}; {\MaQ\cH145}\z{\MaQ\cH46}\z{\MaQ\cH170}\z{\MlQ\cH176}\z{\MbQ\cH237}). There are many questions the first-time Autoconf user asks: What constructs are portable and what constructs aren't portable? How do I decide what to check for? What shouldn't I check for? How do I best use Autoconf's features? What shouldn't I put in `configure.in'? In what order should I run my checks? When should I look at the name of the system instead of checking for specific features? 
+
+\section{What is Portability?}
+
+
+Before we talk about the mechanics ({\MfQ\cH120}\z{\McQ\cH88}\z{\MbQ\cH52}\z{\MbQ\cH237}\z{\McQ\cH182}\z{\MaQ\cH125}; {\MfQ\cH120}\z{\McQ\cH88}; {\MfQ\cH120}\z{\MeQ\cH205}, {\MaQ\cH137}\z{\MaQ\cH231}; {\MbQ\cH156}\z{\MgQ\cH72}\z{\MaQ\cH231}) of
+deciding what to check for and how to check for it, let's ask ourselves a simple question: what is portability? Portability is a quality of the code that enables it to be built and run on a variety of (a variety of {\McQ\cH7}\z{\McQ\cH7}) platforms. In the Autoconf context, portability usually refers to the ability to run on Unix-like systems--sometimes including Windows. 
+
+
+When I first started using Autoconf, I had a hard time deciding what to check for in my `configure.in'. At the time, I was maintaining a
+proprietary ({\MhQ\cH146}\z{\MbQ\cH127}\z{\MbQ\cH237}, {\MhQ\cH146}\z{\MbQ\cH208}\z{\MbQ\cH237}; {\McQ\cH139}\z{\MbQ\cH223}\z{\MbQ\cH237}; {\McQ\cH139}\z{\MbQ\cH223}\z{\MbQ\cH158}\z{\MbQ\cH237}; {\McQ\cH139}\z{\MbQ\cH223}\z{\MbQ\cH237}; {\McQ\cH139}\z{\MbQ\cH223}\z{\MbQ\cH158}\z{\MbQ\cH237})
+program that ran only on SunOS 4. However, I was interested in porting it to 
+Solaris, OSF/1, and possibly Irix. 
+
+
+The approach I took, while workable, was relatively ({\MbQ\cH243}\z{\MaQ\cH250}\z{\MaQ\cH203}, {\MbQ\cH170}\z{\McQ\cH156}\z{\McQ\cH55}\z{\McQ\cH107}; {\MbQ\cH243}\z{\MbQ\cH231})
+time-consuming ({\McQ\cH145}\z{\MbQ\cH118}\z{\MbQ\cH237}; {\MlQ\cH206}\z{\MbQ\cH110}\z{\MbQ\cH77}\z{\MdQ\cH10}\z{\MbQ\cH237}) and painful: I wrote a minimal `configure.in' and then proceeded to simply try to build my program on Solaris. Each time I encountered a build problem, I updated `configure.in' and my source and started again. Once it built correctly, I started testing to see if there were runtime problems related to portability. 
+
+
+Since I didn't start with a relatively portable base, and since I was
+unaware of (unaware of {\MbQ\cH179}\z{\MaQ\cH244}\z{\McQ\cH103}\z{\MaQ\cH131}, {\MbQ\cH179}\z{\MbQ\cH183}\z{\MbQ\cH60}) the tools available to help with adding Autoconf support to a package (see section 24. Migrating an Existing Package to GNU Autotools), it was much more difficult than it had to be. If at all possible, it is better to write portable code to begin with. 
+
+
+There are a large number of Unix-like systems in the world, including many 
+systems which, while still running, can only be considered obsolete. While it 
+is probably possible to port some programs to all such systems, typically it 
+isn't useful to even try. Porting to everything is a difficult process,
+especially given that it usually isn't possible to test on all platforms, and 
+that new operating systems, with their own bugs and 
+idiosyncracies ( ({\MaQ\cH95}\z{\MaQ\cH65}\z{\MbQ\cH237}) {\MbQ\cH173}\z{\McQ\cH148}, {\McQ\cH51}\z{\MbQ\cH52}) are released every year. 
+
+
+We advocate ({\MfQ\cH203}\z{\McQ\cH136}; {\MbQ\cH84}\z{\MdQ\cH76}; {\MaQ\cH51}\z{\MbQ\cH34}) a pragmatic ({\MaQ\cH142}\z{\MaQ\cH245}\z{\MbQ\cH237}; {\MaQ\cH245}\z{\MeQ\cH225}\z{\MbQ\cH237}) 
+approach ({\MbQ\cH106}\z{\MbQ\cH182}, {\McQ\cH198}\z{\MfQ\cH16}; {\MfQ\cH71}\z{\MbQ\cH25}) to portability: we write our programs to target a 
+fairly large, but also fairly modern, cross-section of Unix-like systems. As 
+deficiencies ({\MhQ\cH255}\z{\MjQ\cH184}, {\MhQ\cH255}\z{\McQ\cH245}) are discovered in our portability framework, we 
+update `configure.in' and our sources, and move on. In practice, this is an 
+effective approach.
+
+
+
+\section{Brief introduction to portable sh}
+
+
+If you read a number of `configure.in's, you'll quickly notice that they tend 
+to be written in an unusual style. For instance, you'll notice you 
+\underline{hardly ever} ({\MbQ\cH39}\z{\MaQ\cH253}\z{\MbQ\cH127})\marginpar{ {\MaQ\cH202} sh script {\MaQ\cH85}\z{\MbQ\cH224} test {\MbQ\cH170}\z{\MaQ\cH85}\z{\MbQ\cH224} [
+{\McQ\cH180}\z{\MjQ\cH228}\z{\MhQ\cH245}{\MaQ\cH1}}
+see the `[' program used; instead you'll see `test' invoked. We won't go 
+into all the details of writing a portable shell script here; instead we leave 
+that for chapter \ref{C_Writing_Portable_Bourne_Shell} Writing Portable Bourne 
+Shell, page \pageref{C_Writing_Portable_Bourne_Shell}. 
+
+
+Like other aspects of portability, the approach you take to writing shell scripts in `configure.in' and `Makefile.am' should depend on your goals. Some platforms have notoriously ({\MbQ\cH58}\z{\MaQ\cH177}\z{\MfQ\cH249}\z{\MfQ\cH8}\z{\MaQ\cH203}, {\McQ\cH59}\z{\MaQ\cH177}\z{\MmQ\cH143}\z{\MiQ\cH142}\z{\MaQ\cH203}) broken sh implementations. For instance, Ultrix sh doesn't implement unset. Of course, the GNU Autotools are written in the most portable style possible, so as not to limit your possibilities. 
+
+
+Also, it doesn't really \underline{make sense} ({\MbQ\cH127}\z{\MbQ\cH60}\z{\McQ\cH50})  to talk about 
+portable sh programming in the abstract. sh by itself does very little; most 
+actual work is done by separate programs, each with its own potential 
+portability problems. For instance, some options are not portable between 
+systems, and some seemingly ({\McQ\cH91}\z{\McQ\cH222}\z{\MaQ\cH44}; {\MaQ\cH78}\z{\MdQ\cH11}\z{\MbQ\cH117}) common programs don't exist on 
+every system -- so not only do you have to know which sh constructs are not 
+portable, but you also must know which programs you can (and cannot) use, and 
+which options to those programs are portable. 
+
+
+This seems daunting ({\MaQ\cH73}\z{\MaQ\cH65}\z{\MlQ\cH82}\z{\MbQ\cH165}\z{\MbQ\cH237}; {\MaQ\cH85}\z{\MaQ\cH65}\z{\MbQ\cH173}\z{\MoQ\cH194}\z{\MbQ\cH237}), but
+\underline{in practice} ({\MaQ\cH202}\z{\MaQ\cH245}\z{\MjQ\cH33}\z{\MaQ\cH44}; {\MaQ\cH245}\z{\McQ\cH210}\z{\MaQ\cH44}) it doesn't seem 
+to be too hard to write portable shell scripts -- once you've 
+internalized ({\MaQ\cH85} ({\McQ\cH51}\z{\MdQ\cH65}{\MaQ\cH2} {\MbQ\cH196}\z{\MaQ\cH134}\z{\McQ\cH16}\z{\McQ\cH37}\z{\MdQ\cH220}\z{\MbQ\cH89}\z{\MaQ\cH176}\z{\MaQ\cH147}\z{\McQ\cH55}) {\MaQ\cH113}\z{\MaQ\cH202}\z{\MaQ\cH147}) the rules. Unfortunately,
+this process can take a long time. Meanwhile ({\MaQ\cH119}\z{\MbQ\cH118}, {\MaQ\cH119}\z{\McQ\cH200}) , a 
+pragmatic ({\MaQ\cH142}\z{\MaQ\cH245}\z{\MbQ\cH237}; {\MaQ\cH245}\z{\MeQ\cH225}\z{\MbQ\cH237}) `try and see' approach, while noting other portable 
+code you've seen elsewhere ({\MaQ\cH202}\z{\MaQ\cH129}\z{\McQ\cH84}; {\MbQ\cH37}\z{\MaQ\cH129}\z{\McQ\cH84}; {\MaQ\cH131}\z{\MaQ\cH129}\z{\McQ\cH84}), works fairly well.
+Once again, it pays to \underline{be aware of} ({\MbQ\cH60}\z{\McQ\cH133}\z{\MaQ\cH131}) which architectures 
+you'll probably care about -- you will make different choices if you are 
+writing an extremely ({\McQ\cH221}\z{\MbQ\cH18}) portable program like emacs or gcc than if you 
+are writing something that will only run on various flavors of Linux. Also,
+the cost of having unportable code in `configure.in' is relatively low -- in 
+general it is fairly easy to rewrite pieces on demand as unportable constructs 
+are found. 
+
+\section{Ordering Tests}
+
+
+In addition to the problem of writing portable sh code, another problem which 
+confronts ({\MjQ\cH67}\z{\McQ\cH222}\z{\MjQ\cH88}\z{\MaQ\cH131}; {\McQ\cH222}\z{\McQ\cH64}; {\MjQ\cH96}\z{\MjQ\cH88}) first-time `configure.in' writers is determining the order in which to run the various tests. Autoconf indirectly (via the autoscan program, which we cover in 24. Migrating an Existing Package to GNU Autotools) suggests a standard ordering, which is what we describe here. 
+
+
+The standard ordering is:
+\begin{enumerate}
+\item Boilerplate ({\MbQ\cH206}\z{\MbQ\cH133}\z{\MeQ\cH142}\z{\McQ\cH3}\z{\MbQ\cH237}\z{\McQ\cH100}\z{\MhQ\cH184}; ({\MbQ\cH104}\z{\McQ\cH57}\z{\MbQ\cH147}) {\McQ\cH248}\z{\MbQ\cH65}\z{\MaQ\cH46}\z{\McQ\cH137}\z{\MbQ\cH237}\z{\McQ\cH207}\z{\MiQ\cH52}\z{\MbQ\cH100}\z{\MaQ\cH229}) . This section 
+should include standard boilerplate code,
+such as the call to AC\_{}INIT (which must be first),
+AM\_{}INIT\_{}AUTOMAKE, AC\_{}CONFIG\_{}HEADER, and perhaps AC\_{}REVISION. 
+
+\item Options. The next section should include macros which add 
+command-line options to configure, such as AC\_{}ARG\_{}ENABLE.
+It is typical to put support code for the option in this section as well,
+if it is short enough, like this example from libgcj: 
+
+\begin{Verbatim}[frame=single]
+AC_ARG_ENABLE(getenv-properties,
+[  --disable-getenv-properties
+     don't set system properties from GCJ_PROPERTIES])
+
+dnl Whether GCJ_PROPERTIES is used depends on the target.
+if test -n "$enable_getenv_properties"; then
+ enable_getenv_properties=${
+  enable_getenv_properties_default-yes}
+fi
+if test "$enable_getenv_properties" = no; then
+ AC_DEFINE(DISABLE_GETENV_PROPERTIES)
+fi
+\end{Verbatim}
+
+\item Programs. Next it is traditional to check for programs that are either needed by the configure process, the build process, or by one of the programs being built. This usually involves calls to macros like 
+AC\_{}CHECK\_{}PROG and AC\_{}PATH\_{}TOOL. 
+
+\item Libraries. Checks for libraries come before checks for other objects visible to C (or C++, or anything else). This is necessary because some other checks work by trying to link or run a program; by checking for libraries first you ensure that the resulting programs can be linked. 
+
+\item Headers. Next come checks for existence of headers. 
+
+\item Typedefs and structures. We do checks for typedefs after checking for headers for the simple reason that typedefs appear in headers, and we need to know which headers we can use before we look inside them. 
+
+\item Functions. Finally we check for functions. These come last because 
+functions have dependencies on the preceding ({\MaQ\cH202}\z{\MaQ\cH135}\z{\MbQ\cH237}, {\MaQ\cH202}\z{\MaQ\cH108}\z{\MbQ\cH237}; {\MaQ\cH135}\z{\McQ\cH222}\z{\MbQ\cH237}) items:
+when searching for functions, libraries are needed in order to correctly 
+link, headers are needed in order to find prototypes (this is especially 
+important for C++, which has stricter prototyping rules than C), and typedefs 
+are needed for those functions which use or return types which are not built in. 
+
+\item Output. This is done by invoking AC\_{}OUTPUT. 
+\end{enumerate}
+
+This ordering should be considered a rough guideline, and not a list of 
+hard-and-fast ({\MaQ\cH46}\z{\MaQ\cH241}\z{\McQ\cH137}\z{\MbQ\cH121}\z{\MbQ\cH237}; {\MaQ\cH195}\z{\MbQ\cH143}\z{\MbQ\cH237}) rules. Sometimes it is necessary to 
+interleave ({\MfQ\cH158}\z{\MaQ\cH112}, {\MfQ\cH158}\z{\MdQ\cH197}) tests, either to make `configure.in' easier to 
+maintain, or because the tests themselves do need to be in a different order. For instance, if your project uses both C and C++ you might choose to do all the C++ checks after all the C checks are done, in order to make `configure.in' 
+\underline{a bit} ({\MbQ\cH127}\z{\McQ\cH245}) easier to read. 
+
+\section{What to check for}
+
+
+Deciding what to check for is really the central part of 
+writing `configure.in'. Once you've read the Autoconf reference manual,
+the ``how''s of writing a particular test should be fairly clear.
+The ``when''s might remain a mystery -- and it's just as easy to check for 
+too many things as it is to check for too few. 
+
+
+One notable area of divergence ({\MiQ\cH42}\z{\McQ\cH215}; {\MaQ\cH125}\z{\McQ\cH215}; {\MbQ\cH243}\z{\MbQ\cH230}) between various Unix-like 
+systems is that the same programs don't exist on all systems, and, even when 
+they do, they don't always work in the same way. For these problems we 
+recommend, when possible, following the advice of the GNU Coding Standards: 
+use the most common options from a relatively limited set of programs. 
+Failing ({\MaQ\cH224}\z{\MbQ\cH139}\z{\MbQ\cH179}\z{\MbQ\cH127}...; {\McQ\cH74}\z{\MbQ\cH204}... {\MbQ\cH118}) that, try to stick to ({\MfQ\cH30}\z{\MbQ\cH107}; {\MaQ\cH93}\z{\MaQ\cH232})
+programs and options specified by POSIX, perhaps augmenting this approach 
+by doing checks for known problems on platforms you care about. 
+
+
+Checking for tools and their differences is usually a fairly small part of a `configure' script; more common are checks for functions, libraries, and the like. 
+
+
+\underline{Except for} ({\McQ\cH206}\z{\MaQ\cH55}... {\MaQ\cH74}\z{\MaQ\cH213}, {\McQ\cH98}\z{\MaQ\cH46}\z{\MbQ\cH117}\z{\MbQ\cH226}\z{\MbQ\cH107}) a few core libraries 
+like `libc' and, usually, `libm' and libraries like `libX11' which typically 
+aren't considered system libraries, there isn't much 
+agreement ({\MaQ\cH176}\z{\MbQ\cH60}, {\McQ\cH248}\z{\MbQ\cH95}, {\MaQ\cH155}\z{\MaQ\cH236}, {\MaQ\cH155}\z{\McQ\cH135}) about library 
+names or contents between Unix systems. Still, libraries are easy to handle,
+because decisions about libraries almost always only affect the 
+various `Makefile's. That means that checking for another library typically 
+doesn't require major (or even, sometimes, any) changes to the source code.
+Also, because adding a new library test has a small impact ({\MfQ\cH9}\z{\McQ\cH224}; {\MaQ\cH84}\z{\MbQ\cH224}) on the 
+development cycle -- effectively just re-running `configure' and then a 
+relink -- you can effectively ({\MbQ\cH127}\z{\MbQ\cH94}\z{\MaQ\cH203}; {\MbQ\cH222}\z{\MbQ\cH94}\z{\MaQ\cH203}) adopt ({\MbQ\cH83}\z{\MaQ\cH166}; {\MbQ\cH83}\z{\MhQ\cH209}; {\MdQ\cH220}\z{\MbQ\cH89}) a 
+lax ({\MaQ\cH46}\z{\MaQ\cH195}\z{\MbQ\cH143}\z{\MbQ\cH237}; {\McQ\cH239}\z{\McQ\cH239}\z{\MiQ\cH150}\z{\MiQ\cH150}\z{\MbQ\cH237}) approach to libraries. For instance, you can just 
+make things work on the few systems you immediately care about and then 
+handle library changes on an as-needed basis. 
+
+
+Suppose ({\MmQ\cH147}\z{\MbQ\cH59}, {\MaQ\cH74}\z{\MbQ\cH209}) you do \underline{end up} ({\McQ\cH33}\z{\MgQ\cH33}, {\MbQ\cH167}\z{\MdQ\cH22}) with a link 
+problem. How do you handle it? The 
+first thing to do is use nm to look through the system libraries to see 
+if the missing function exists. If it does, and it is in a library you 
+can use then the solution is easy -- just add another AC\_{}CHECK\_{}LIB.
+Note that just finding the function in a library is not enough, because on 
+some systems, some ``standard'' libraries are 
+undesirable ({\MaQ\cH73}\z{\MaQ\cH65}\z{\MaQ\cH46}\z{\MbQ\cH48}\z{\MbQ\cH237}, {\MaQ\cH46}\z{\MaQ\cH167}\z{\MbQ\cH161}\z{\MjQ\cH67}\z{\MbQ\cH237}; {\McQ\cH110}\z{\MdQ\cH192}\z{\MbQ\cH237}); `libucb' is the 
+most common example of a library which you should avoid. 
+
+If you can't find the function in a system library then you have a 
+somewhat ({\MbQ\cH127}\z{\McQ\cH245}, {\MhQ\cH154}\z{\MfQ\cH22}) more difficult problem: a non-portable function.
+There are basically three approaches to a missing function. Below we talk about 
+functions, but really these same approaches apply,
+\underline{more or less} ({\MaQ\cH214}\z{\MaQ\cH253}\z{\MbQ\cH127}\z{\MaQ\cH60}; {\MaQ\cH215}\z{\McQ\cH26}), to typedefs, structures,
+and global variables.  
+
+The first approach is to write a replacement function and either 
+conditionally ({\McQ\cH203}\z{\MbQ\cH127}\z{\MbQ\cH145}\z{\MaQ\cH75}\z{\MaQ\cH203}) compile it, or put it into an 
+appropriately-named (appropriately {\MjQ\cH95}\z{\MbQ\cH231}\z{\MaQ\cH203}, {\MaQ\cH175}\z{\MjQ\cH95}\z{\MaQ\cH203}, {\MbQ\cH243}\z{\McQ\cH8}\z{\MaQ\cH203}) file and use 
+AC\_{}REPLACE\_{}FUNCS. For instance, Tcl uses AC\_{}REPLACE\_{}FUNCS (strstr) 
+to handle systems that have no strstr function. 
+
+
+The second approach is used when there is a similar function with a different 
+name. The idea here is to check for all the alternatives and then modify 
+your source to use whichever ({\MbQ\cH204}\z{\McQ\cH127}\z{\MkQ\cH168}\z{\MaQ\cH95}; {\MbQ\cH204}\z{\McQ\cH127}\z{\MkQ\cH168}\z{\MaQ\cH60}) one might exist.
+The idiom ({\MfQ\cH85}\z{\MbQ\cH224}\z{\McQ\cH120}; {\MbQ\cH65}\z{\McQ\cH120}; {\McQ\cH51}\z{\MfQ\cH85}\z{\McQ\cH120}) here is to use break in the second 
+argument to AC\_{}CHECK\_{}FUNCS; this is used both to skip unnecessary tests 
+and to indicate to the reader that these checks are related. For instance,
+here is how libgcj checks for inet\_{}aton or inet\_{}addr; it only uses 
+the first one found:
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_FUNCS(inet_aton inet_addr, break)
+\end{Verbatim}
+
+Code to use the results of these checks looks something like: 
+
+
+\begin{Verbatim}[frame=single]
+#if HAVE_INET_ATON
+  ... use inet_aton here
+#else
+#if HAVE_INET_ADDR
+  ... use inet_addr here
+#else
+#error Function missing!
+#endif
+#endif
+\end{Verbatim}
+
+Note how we've made it a compile-time error if the function does not exist.
+In general it is best to make errors occur as early as possible in the 
+build process. 
+
+
+The third approach to non-portable functions is to write code such that 
+these functions are only optionally used. For instance, if you are writing 
+an editor you might decide to use mmap to map a file into the editor's memory.
+However, since mmap is not portable\marginpar{{\McQ\cH165}\z{\McQ\cH248}\z{\MdQ\cH198}\z{\MaQ\cH228}\z{\MbQ\cH78}\z{\MaQ\cH124} mmap {\MaQ\cH46}\z{\MaQ\cH120}\z{\MaQ\cH170}\z{\MfQ\cH190}\z{\MbQ\cH52}},
+you would also write a function to use the more portable read. 
+
+
+Handling known non-portable functions is only part of the problem, however.
+The pragmatic ({\MaQ\cH142}\z{\MaQ\cH245}\z{\MbQ\cH237}; {\MaQ\cH245}\z{\MeQ\cH225}\z{\MbQ\cH237}) approach works fairly well, but it is somewhat 
+inefficient ({\MbQ\cH204}\z{\MbQ\cH94}\z{\MhQ\cH48}\z{\MbQ\cH237}; {\MbQ\cH94}\z{\McQ\cH63}\z{\MeQ\cH207}\z{\MbQ\cH237}; {\MbQ\cH204}\z{\McQ\cH63}\z{\MbQ\cH237}, {\MaQ\cH46}\z{\McQ\cH8}\z{\McQ\cH60}\z{\MbQ\cH237}) if you 
+are primarily ({\McQ\cH237}\z{\MaQ\cH108}; {\McQ\cH150}\z{\MaQ\cH128}, {\MaQ\cH159}\z{\MaQ\cH86}) developing on a more modern system, like GNU/Linux, which has few functions missing. In this case the problem is that you might not notice non-portable constructs in your code until it has largely been finished. 
+
+
+Unfortunately, there's no high road to solving this problem. In the end, you 
+need to have a working knowledge of the range of existing Unix systems.
+Knowledge of standards such as POSIX and XPG can be useful here, as a 
+first cut -- if it isn't in POSIX, you should at least consider checking for it.
+However, standards are not a panacea ({\McQ\cH78}\z{\McQ\cH63}\z{\MiQ\cH147}; {\McQ\cH94}\z{\MbQ\cH97}\z{\MaQ\cH53}\z{\McQ\cH173}) -- not all systems 
+are POSIX compliant,
+and sometimes there are bugs in systems functions which you must work around. 
+
+
+One final class of problems you might encounter is that it is also easy to 
+check for too much. This is bad because it adds unnecessary maintenance 
+burden ({\McQ\cH189}\z{\McQ\cH138}, {\McQ\cH189}\z{\MbQ\cH86}; {\McQ\cH138}\z{\MbQ\cH86}, {\MgQ\cH143}\z{\McQ\cH189}\z{\MbQ\cH237}\z{\McQ\cH141}\z{\MaQ\cH76}) to your program. For instance, sometimes 
+you'll see code that checks for $<$sys/types.h$>$. However, there's no point 
+in doing that -- using this header is mostly portable. Again, this can only be 
+addressed by having a practical knowledge, which is only really possible by 
+examining your target systems. 
+
+\section{Using Configuration Names}
+
+While feature tests are definitely the best approach, a `configure' script may 
+occasionally ({\MdQ\cH88}\z{\MhQ\cH21}, {\McQ\cH200}\z{\MbQ\cH67}) have to make a decision based on a configuration 
+name. This may be necessary if certain code must be compiled differently 
+based on something which can not be tested using a standard Autoconf feature 
+test. For instance, the expect ({\McQ\cH227}\z{\MbQ\cH101}; {\McQ\cH227}\z{\MbQ\cH130}) package needs to find 
+information about the system's `tty' implementation; this can't 
+reliably ({\MaQ\cH170}\z{\MjQ\cH212}\z{\MaQ\cH203}; {\MbQ\cH252}\z{\MaQ\cH245}\z{\MaQ\cH203}) be done when cross compiling without examining 
+the particular configuration name.
+
+It is normally better to test for particular features, rather than to test for 
+a particular system type. This is because as Unix and other operating 
+systems evolve ({\MaQ\cH85}\z{\MjQ\cH77}\z{\MbQ\cH165}\z{\MbQ\cH36}\z{\MbQ\cH65}; {\MbQ\cH234}\z{\MbQ\cH4}, {\MbQ\cH4}\z{\McQ\cH199}) , different systems copy features 
+from one another.
+
+When there is no alternative to testing the configuration name in 
+a `configure' script, it is best to define a macro which describes the feature,
+rather than defining a macro which describes the particular system. This 
+permits the same macro to be used on other systems which 
+adopt ({\MbQ\cH83}\z{\MaQ\cH166}; {\MbQ\cH83}\z{\MhQ\cH209}; {\MdQ\cH220}\z{\MbQ\cH89}) the 
+same feature (see chapter \ref{C_Writing_New_Macros_for_Autoconf}
+Writing New Macros for Autoconf,
+page \pageref{C_Writing_New_Macros_for_Autoconf}).
+
+Testing\marginpar{test a particular system {\McQ\cH248}\z{\MiQ\cH79}\z{\McQ\cH183}\z{\MbQ\cH125}\z{\MaQ\cH85}\z{\MbQ\cH224} case {\MdQ\cH197}\z{\MjQ\cH72}{\MaQ\cH1}}
+for a particular system is normally done using a case statement in 
+the autoconf `configure.in' file. The case statement might look something 
+like the following, assuming that `host' is a shell variable holding a 
+canonical ({\MbQ\cH153}\z{\MbQ\cH196}\z{\MbQ\cH237}; {\MbQ\cH158}\z{\MeQ\cH110}\z{\MbQ\cH237}) configuration system -- which will be the case 
+if `configure.in' uses the `AC\_{}CANONICAL\_{}HOST' 
+or `AC\_{}CANONICAL\_{}SYSTEM' macros.
+
+ 	
+\begin{verbatim}
+case "${host}" in
+i[[3456]]86-*-linux-gnu*) do something ;;
+sparc*-sun-solaris2.[[56789]]*) do something ;;
+sparc*-sun-solaris*) do something ;;
+mips*-*-elf*) do something ;;
+esac
+\end{verbatim}
+
+Note the doubled square brackets\marginpar{{\MaQ\cH115}\z{\MaQ\cH95}\z{\MaQ\cH50}\z{\MfQ\cH142}\z{\MlQ\cH67}} in this piece of code.
+These are used to work around an ugly implementation detail of autoconf --- it
+uses M4 under the hood ({\MaQ\cH78}\z{\McQ\cH234}\z{\MeQ\cH216}\z{\MbQ\cH237}\z{\MbQ\cH137}\z{\McQ\cH97}; {\MiQ\cH1}; {\McQ\cH154}\z{\MnQ\cH40}; {\McQ\cH81}\z{\MaQ\cH228}). Without these extra 
+brackets, the square brackets in the case statement would be
+swallowed ({\MdQ\cH213}\z{\MaQ\cH45}, {\MpQ\cH148}\z{\MaQ\cH45}) by M4, and would not appear in the 
+resulting `configure'. This nasty ({\McQ\cH216}\z{\McQ\cH84}\z{\MbQ\cH220}\z{\MbQ\cH237}, {\MaQ\cH189}\z{\McQ\cH230}\z{\MaQ\cH214}\z{\MbQ\cH237}; {\McQ\cH110}\z{\MdQ\cH192}\z{\MbQ\cH237}) detail is 
+discussed at more length in \ref{C_M4} M4, page \pageref{C_M4}.
+
+It is particularly important to use `*' after the operating system field, in 
+order to match the version number which will be generated by `config.guess'.
+In most cases you must be careful to match a range of processor types. For 
+most processor families, a trailing `*' suffices, as in `mips*' above. For 
+the i386 family, something along ({\MgQ\cH149}\z{\McQ\cH79}; {\MjQ\cH223}\z{\McQ\cH79}) the lines of `i[34567]86' 
+suffices ({\McQ\cH151}\z{\MeQ\cH68}) \underline{at present} ({\MbQ\cH241}\z{\MaQ\cH135}; {\MbQ\cH219}\z{\MaQ\cH202}). For the m68k family,
+you will need something like `m68*'. Of course, if you do not need to 
+match on the processor, it is simpler to just replace the entire field 
+by a `*', as in `*-*-irix*'. 
+

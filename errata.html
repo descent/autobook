@@ -1,0 +1,354 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"><html><head>
+    
+    <title>GNU Autoconf, Automake and Libtool</title><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <meta name="description" content="Online resource for New Riders&apos; GNU Autoconf, Automake and Libtool">
+    <meta name="keywords" content="GNU Autconf Automake Libtool New Riders"><!-- titlebar --></head>
+
+  
+  <body topmargin="0" leftmargin="0" marginwidth="0" marginheight="0" bgcolor="#ffffff" text="#000000" link="#6688aa" vlink="#336688" alink="#808080"><font face="Arial,Helvetica">
+    </font><p align="center"><font face="Arial,Helvetica"> <br>
+    <table cellpadding="1" cellspacing="0" width="100%" border="0">
+      <tbody><tr valign="middle">
+        <td width="170" align="center">
+	  <img src="errata_files/logo.png" hspace="20" vspace="16" border="0" alt="[GNU Autotools]">
+	  <font size="-1"><br> </font>
+	</td>
+	<td align="right" valign="center">
+	  <font size="-1" color="#cc0000">
+	  <a href="http://sources.redhat.com/autobook/index.html">home</a>  
+	  <font color="#707070"><b>errata</b></font>  
+	  <a href="http://sources.redhat.com/autobook/autobook/autobook.html">online</a>  
+	  <a href="http://sources.redhat.com/autobook/download.html">download</a>  
+	  <a href="http://sources.redhat.com/autobook/links.html">links</a>  
+	</font></td>
+	<td>
+	  <a href="http://www.blacklocust.com/"><img src="errata_files/icon.png" border="0" alt="[goat icon]" width="92" height="69"></a>
+	</td>
+      </tr>
+    </tbody></table>
+    <!-- end titlebar -->
+
+    <table width="100%" cellpadding="5" cellspacing="5" border="0">
+      <tbody><tr valign="top">
+
+	<!-- column 1 begin -->
+        <td width="90">
+          <table bgcolor="#000000" border="0" width="100%" cellpadding="1" cellspacing="0"><tbody><tr><td>
+	    <table width="100%" cellspacing="0" border="0" cellpadding="2">
+
+	      <!-- column 1 title -->
+	      <tbody><tr><td bgcolor="#336688">
+	        <font color="#ffffff">
+		  <b> Navigation Bar </b>
+	        </font>
+	      </td></tr>
+
+	    </tbody></table>
+	  </td></tr></tbody></table>
+
+	  <!-- column 1 content -->
+          <table bgcolor="#000000" border="0" width="100%" cellpadding="1" cellspacing="0"><tbody><tr><td>
+	  <table width="100%" cellspacing="0" border="0" cellpadding="7" bgcolor="#fefefe"><tbody><tr><td bgcolor="#e6e6e6">
+	    <a href="http://sources.redhat.com/autobook/cover.jpg"><img src="errata_files/cover-thumb.png" border="1" alt="[cover]" width="82" height="124"></a>
+
+	    <font size="-1">
+	      <a href="http://sources.redhat.com/autobook/index.html">Authors</a><br>
+	      <b>Errata</b><br>
+	      <a href="http://sources.redhat.com/autobook/autobook/autobook_toc.html">Contents</a><br>
+	      <a href="http://sources.redhat.com/autobook/autobook/autobook.html">Online</a><br>
+	      <a href="http://sources.redhat.com/autobook/download.html">Download</a><br>
+	      <a href="http://sources.redhat.com/autobook/links.html">Links</a><br>
+	    </font>
+
+	  </td></tr></tbody></table>
+	  </td></tr></tbody></table>
+	</td>
+
+	<!-- main column -->
+        <td rowspan="1">
+	  <p><font size="+1" color="#336688">Errata</font>
+
+	  </p><p>The first printing (October 2000) contains a number of minor
+	  typographical errors, detailed on this page.  The <a href="http://sources.redhat.com/autobook/autobook/book1.html">html version of the text</a> does not
+ 	  have these errors.  If you discover any more errors, either here
+	  or in the printed version of the book, then please do mail
+ 	  <a href="mailto:gvv@techie.com">me</a> so that I can list them
+ 	  here for the benefit of other readers, and perhaps have them fixed
+	  in the next printing.
+
+	  </p><div>
+	    <dl><dt><i>frontmatter</i>:</dt><dd>
+		We should have included an easy to find reference to the
+		book's web site, <a href="http://www.newriders.com/autoconf">http://www.newriders.com/autoconf</a> somewhere in the
+		frontmatter.
+	      </dd><dt><i>page xx</i>:</dt><dd>
+	        Please replace `momospaced' with `monospaced'.<br>
+        	The font used is not Courier, it is some sort of
+ 		sans-serif.<br>
+        	Shell log lines typed by the user are not emboldened.
+	      </dd><dt><i>p 20, para. 2</i>:</dt><dd>
+	        There is a sentence missing near the end of this paragraph:<br>
+		$@ <i>is available in any rule, but for some
+		versions of </i>make<i> </i>$&lt;<i> is only available in
+		suffix rules.  Here is a simple </i>Makefile<i>:</i>
+	      </dd><dt><i>p 20, example 1</i>:</dt><dd>
+	        This example should not use <tt>$&lt;</tt>, and should
+		instead read as follows:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+all:    dummy
+	@echo "$@ depends on dummy"
+
+dummy:
+	touch $@
+		</pre></td></tr></tbody></table>
+	      </dd><dt><i>p 22, para. 5</i>:</dt><dd>The file `nly.c' should have been listed as one of
+	        the C source files.
+	      </dd><dt><i>p. 54, example 2</i>:</dt><dd>
+	        the last line should read:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+  [$Xsed -e 's/\.[^.]* /.\$U&amp;/g;s/\.[^.]*$/.\$U&amp;/']`</pre>
+		</td></tr></tbody></table>
+        	(the /\ are typeset wrong; there is a missing space; the
+		difference between ` and ' is very hard to see in this
+		font)<br>
+		The additional level of `[..]' quotes is necessary to prevent
+		autoconf from doing m4 quote substitution in the sed
+		expression.
+	      </dd><dt><i>p. 61, para. 1</i>:</dt><dd>
+	        The use of <tt>bzero</tt> needs to be explained:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <br>
+		  <p>Notice in the code above, that <tt>xcalloc</tt> is
+		  implemented in terms of <tt>xmalloc</tt>, since
+		  <tt>calloc</tt> itself is not available in some
+		  older C libraries.  Also, the <tt>bzero</tt>
+		  function is actually deprecated in favour of
+		  <tt>memset</tt> in modern C libraries -- I'll
+		  explain how to take this into account in section
+		  7.2.3, Beginnings of a <tt>configure.in</tt>.</p><br>
+		</td></tr></tbody></table>
+	      </dd><dt><i>p. 67, between para. 3 and para. 4</i>:</dt><dd>
+	        The forward reference from the previous errata needs
+		to be added:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <br>
+		  <p>Recall that the use of <tt>bzero</tt> in the Memory
+		  Management subsection, of section 7.2.1, is not
+		  entirely portable.  The trick is to provide a
+		  <tt>bzero</tt> work-alike, depending on which
+		  functions Autoconf detects.  Add the following
+		  towards the end of <tt>configure.in</tt>:
+		  </p><pre>  ...
+  AC_CHECK_FUNCS(bzero memset, break)
+  ...</pre>
+                  <p>With the addition of this small snippet of code to
+		  <tt>common.h</tt>, I can now make use of
+		  <tt>bzero</tt> even when linking with a C library
+		  that has no implementation of its own:
+		  </p><pre>  #if !HAVE_BZERO &amp;&amp; HAVE_MEMSET
+  # define bzero(buf, bytes)      ((void) memset (buf, 0, bytes))
+  #endif</pre>
+		</td></tr></tbody></table>
+	      </dd><dt><i>p. 83, terminology sidebar</i>:</dt><dd>
+	        This could be clearer.  Substitute the following:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <br>
+		  <p>The sheer number of uses of the word library' in
+		  this book could be easily very confusing.  In this
+		  chapter and throughout the rest of the book, I will
+		  refer to various kinds of libraries as follows:
+
+		  </p><dl compact=""><dt>`native'</dt><dd>Low level libraries, that is, libraries
+		    provided by the host architecture.</dd><dt>`Libtool library'</dt><dd>The kind of library built by Libtool.  This
+		    encompasses both the shared and static native
+		    components of the implementation of the named
+		    library.</dd><dt>`pseudo-library'</dt><dd>The high level <samp>.la'</samp> file produced
+		   by Libtool.  The `pseudo-library' is not a library
+		   in its own right, but is treated as if it were from
+		   outside the Libtool interface.</dd></dl>
+
+		 <p>Furthermore, in the context of Libtool, there is
+		 another subtle (but important) distinction to be
+		 drawn:
+
+		 </p><dl compact=""><dt>`static <em>library</em>'</dt><dd>A Libtool library which has no shared archive
+		   component.</dd><dt>`static <em>archive</em>'</dt><dd>The static component of a Libtool library.</dd></dl>
+		
+		</td></tr></tbody></table>
+	      </dd><dt><i>p. 93, penultimate para.</i>:</dt><dd>
+	        Poor punctuation.  Better that it read like this:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <br>
+		  <p>The link warning tells you that <tt>libtool</tt>
+		  knows that on HP-UX the program will stop working if
+		  it is copied directly to the installation directory;
+		  to prevent it from breaking, <tt>libtool</tt>
+		  relinks the program when it is installed (see ...</p>
+		</td></tr></tbody></table>
+	      </dd><dd>
+
+	      </dd><dt><i>p. 93, last para.</i>:</dt><dd>
+	        Poor punctuation again.  The last sentence should
+		begin:<br>
+		<i>Often this is what you want, if the library...</i><br>
+		(The comma following ``Often'' should be removed).
+	      </dd><dd>
+
+	      </dd><dt><i>p. 112, example 1</i>:</dt><dd>
+	        similarly:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+  LTLIBOBJS=`echo X"$LIBOBJS" | \
+  [$Xsed -e "s,\.[^.]* ,.lo ,g;s,\.[^.]*$,.lo,"]`</pre>
+		</td></tr></tbody></table>
+        	(filling and spacing has broken the typeset version)<br>
+		The additional level of `[..]' quotes is necessary to prevent
+		autoconf from doing m4 quote substitution in the sed
+		expression.
+	      </dd><dt><i>p. 112, example 2</i>:</dt><dd>
+	        and again:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+  LTALLOCA=`echo X"$ALLOCA" | [$Xsed -e "s,\.[^.]*$,.lo,"]`</pre>
+		</td></tr></tbody></table>
+		(the | is typeset differently to the other examples)<br>
+		The additional level of `[..]' quotes is necessary to prevent
+		autoconf from doing m4 quote substitution in the sed
+		expression.
+	      </dd><dt><i>p. 126/127, example at top of p.127</i>:</dt><dd>
+	        The example should not be calculating
+		<tt>LTALLOCA</tt>, but rather <tt>LTLIBOBJS</tt> as
+		mentioned in the following paragraph.  The penultimate
+		paragraph of code should be as follows:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+  Xsed="sed -e s/^X//"
+  LTLIBOBJS=`echo X"$LIBOBJS" | \
+  [$Xsed -e "s,\.[^.]* ,.lo ,g;s,\.[^.]*$,.lo,"]`</pre>
+		</td></tr></tbody></table>
+	      </dd><dt><i>p. 134, example 2</i>:</dt><dd>
+	        and again:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+  Xsed="sed -e s/^X//"
+  LTLIBOBJS=`echo X"$LIBOBJS" | \
+  [$Xsed -e "s,\.[^.]* ,.lo ,g;s,\.[^.]*$,.lo,"]`</pre>
+		</td></tr></tbody></table>
+        	(we should have used Xsed for consistency, and both ` were
+	        missing)<br>
+		The additional level of `[..]' quotes is necessary to prevent
+		autoconf from doing m4 quote substitution in the sed
+		expression.
+	      </dd><dt><i>p. 137, para. 3</i>:</dt><dd>
+	        Poor grammar.  The next to last sentence of this
+		paragraph should have said:<br>
+		<i>The purpose of this file is to be
+		</i><tt>#include</tt><i>d from all the project source
+		files.</i>
+	      </dd><dt><i>p. 138, para. 2</i>:</dt><dd>
+	        Excessive commas.  The para. should start with:<br>
+		<i>The Autoconf macro AC_OUTPUT_COMMANDS prvides a way
+		to solve this problem.</i>
+	      </dd><dt><i>p. 143, example. 1</i>:</dt><dd>
+	        The full example should read as follows:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+docdir		= $(top_builddir)/doc
+
+html:
+	echo Making $@ in $(docdir)
+	cd $(docdir) &amp;&amp; make $@
+		</pre></td></tr></tbody></table>
+		(`<tt>@</tt>' missing from both `<tt>$@</tt>')
+	      </dd><dt><i>p. 205, last para.</i>:</dt><dd>
+	        Should have been typeset like the others on the following
+ 	        page (full width, with ``Function'' right justified on the
+ 	        header line.
+	      </dd><dt><i>p. 200, </i><tt>main</tt><i> declaration.</i>:</dt><dd>
+	        The <tt>argv</tt> parameter is missing its <tt>[]</tt>.
+	      </dd><dt><i>p. 202, example. 3</i>:</dt><dd>
+	        The full example should read as follows:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+$ <b>gcc -fPIC -c simple-module.c</b>
+$ <b>gcc -shared -o simple-module.so simple-module.o</b>
+		</pre></td></tr></tbody></table>
+		(missing object file on second line)
+	      </dd><dt><i>p. 226, para. 3</i>:</dt><dd>
+	        sym_prefix should be emboldened, and is a ``Variable'',
+		not a ``Function''.
+	      </dd><dt><i>p. 227, para. 1</i>:</dt><dd>A ``Variable'', not a ``Function''.</dd><dt><i>p. 227, para. 4</i>:</dt><dd>Missing underscore in lt_dlseterror.</dd><dt><i>p. 268, example 1</i>:</dt><dd>This should more properly say:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+$ ls -d /usr/bin/* | wc -l
+sh: error: line too long</pre>
+
+		</td></tr></tbody></table>
+		It is the use of <tt>*</tt> that causes the problem,
+		not the lack of a directory change.
+	      </dd><dt><i>p. 271, example. 1</i>:</dt><dd>
+	        The `<tt>do</tt>' is missing from the innermost for loop:
+		<table border="0" bgcolor="#6688aa" width="95%"><tbody><tr><td>
+		  <pre>
+for dir
+do
+  shell="$dir/$cmd"
+  ...
+done</pre>
+		</td></tr></tbody></table>
+	      </dd><dt><i>p. 276, para. 5</i>:</dt><dd>This should be a reference to section 21.2.4, as it
+	      refers to the self executing script in that section.</dd><dt><i>p. 290, para. 1</i>:</dt><dd>Please add the following sentence to the end of the
+	      paragraph:<br>
+	      <i>Note that the name of the cache variable must contain
+	      `_cv_' in order to be saved correctly.</i>
+	      </dd><dt><i>p. 290, para. 4</i>:</dt><dd>The link to the autoconf macro archive doesn't work
+	      anymore.  Instead, you should use <a href="http://www.gnu.org/software/ac-archive">http://www.gnu.org/software/ac-archive</a></dd><dt><i>p. 303, para. 3</i>:</dt><dd>
+	        More specifically:<br>
+	        <i>as far back as version 2.0 as best as I can tell</i>.
+	      </dd><dt><i>p. 316, para. 1</i>:</dt><dd><tt>AC_EXEEXT</tt> is not a Libtool macro, it is an
+	      Autoconf macro.</dd></dl>
+	  </div>
+
+	  <div align="right">
+	    [ <a href="http://sources.redhat.com/autobook/index.html"><b>Home</b></a> ]<p>
+	  </p></div>
+        </td>
+    </tr></tbody></table>
+
+    <table bgcolor="#000000" border="0" width="100%" cellpadding="1" cellspacing="5"><tbody><tr><td>
+      <table width="100%" cellspacing="0" border="0" cellpadding="2">
+	<tbody><tr>
+	  <td bgcolor="#336688" align="left">
+	    <font size="-2" color="#ffffff">
+	    Comments on these pages to <a href="mailto:webmaster@oranda.demon.co.uk">the webmaster</a>.
+	    </font>
+	  </td>
+	  <td bgcolor="#336688" align="right">
+	    <font size="-2" color="#ffffff">
+	    </font><p><font size="-2" color="#ffffff">Copyright (C) 2000 <a href="mailto:gvv@techie.com">Gary V. Vaughan.</a>
+	    </font>
+	  </p></td>
+    	</tr>
+	<tr>
+	  <td bgcolor="#336688" colspan="2" width="100%" align="leftr">
+	    <font size="-2" color="#ffffff">
+	    </font><p><font size="-2" color="#ffffff">Verbatim copying and distribution of this entire article is
+	    permitted in any medium, provided this notice is preserved.
+	    </font>
+	  </p></td>
+	</tr>
+	<tr>
+	  <td bgcolor="#336688" colspan="2" width="100%" align="left">
+	    <font size="-2" color="#ffffff">
+<!-- hhmts start -->
+Last modified: Thu Jan 25 21:50:13 GMT 2001
+<!-- hhmts end -->
+	    </font>
+	  </td>
+        </tr>
+      </tbody></table>
+    </td></tr></tbody></table>
+
+  </font></p></body></html>

@@ -1,0 +1,13 @@
+#!/bin/sh
+if [ -f $1.ctx ]
+then
+ cwtex $1.ctx
+ latex $1.ctx
+ latex $1.ctx
+ dvips -o $1.ps $1.ctx.dvi
+ exit 0
+else
+ echo "$@.ctx not found"
+ exit 1
+fi
+#ps2pdf autobook.ps

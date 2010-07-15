@@ -1,0 +1,458 @@
+\chapter{Introducing GNU Automake}\label{C_Introducing_GNU_Automake}
+
+
+The primary goal of Automake is to generate `Makefile.in's compliant with the 
+GNU Makefile Standards. Along the way, it tries to remove 
+boilerplate (照本宣科的規範; (新聞業)一成不變的陳腐文字) and 
+drudgery (苦工; 賤役; 單調沈悶的工作). It also helps the `Makefile' writer by 
+implementing features (for instance automatic dependency tracking and parallel 
+make support) that most maintainers don't have the patience to implement by 
+hand. It also implements some best practices (習慣,常規,慣例) as well as 
+workarounds for 
+vendor make bugs -- both of which require 
+arcane (神祕的; 不可思議的; 晦澀難解的)
+knowledge not generally 
+available. 
+
+
+A secondary goal for Automake is that it work well with other free software, and, specifically, GNU tools. For example, Automake has support for Dejagnu-based test suites. 
+
+
+Chances are that you don't care about the GNU Coding Standards. That's okay.
+You'll still appreciate (欣賞, 賞識, 感謝,感激, 體會, 領會, 察知) the 
+convenience that Automake provides, and you'll find that the GNU standards 
+compliance feature, for the most part,
+assists rather than impedes (妨礙, 阻礙; 阻止). 
+
+
+Automake helps the maintainer with five large tasks, and countless minor ones. The basic functional areas are: 
+
+
+\begin{enumerate}
+\item Build 
+\item Check 
+\item Clean 
+\item Install and uninstall 
+\item Distribution 
+\end{enumerate}
+
+We cover the first three items in this chapter, and the others in later 
+chapters.\marginpar{這一章只討論 Build, Check, Clean}
+Before we get into the details, let's talk a bit about some 
+general principles of Automake. 
+
+\section{General Automake principles}
+
+Automake at its simplest turns (使變得; 使成為 [(+into)] ) a file called `Makefile.am' into a 
+GNU-compliant `Makefile.in' for use with `configure'. Each `Makefile.am' is 
+written according to make syntax; Automake recognizes special macro and target 
+names and generates code based on these. 
+
+There are a few Automake rules which differ slightly from make rules: 
+
+\begin{itemize}
+\item Ordinary make comments are passed through to the output, but comments 
+beginning with `\#\#' are Automake comments and are not passed through. 
+
+\item Automake supports include directives. These directives are not passed 
+through to the `Makefile.in', but instead are processed by automake -- files 
+included this way are treated as if they were textually (本文地; 原文地)
+included 
+in `Makefile.am' at that point. This can be used to add boilerplate to 
+each `Makefile.am' in a project via a centrally-maintained file. The filename 
+to include can start with `\$(top\_{}srcdir)' to indicate that it should be 
+found relative to the top-most directory of the project; if it is a 
+relative path or if it starts with `\$(srcdir)' then it is relative to 
+the current directory. For example, here is how you would reference 
+boilerplate code from the file `config/Make-rules' (where `config' is a 
+top-level dirctory in the project): 
+
+\begin{Verbatim}[frame=single]
+include $(top_srcdir)/config/Make-rules
+\end{Verbatim}
+
+
+
+\item Automake supports conditionals which are not passed directly through 
+to `Makefile.in'. This feature is discussed 
+in chapter \ref{C_Advanced_GNU_Automake_Usage} Advanced GNU Automake Usage,
+page \pageref{C_Advanced_GNU_Automake_Usage}. 
+
+\item Automake supports macro assignment using `+='; these assignments are translated by Automake into ordinary `=' assignments in `Makefile.in'.
+
+\end{itemize}
+
+All macros and targets, including those which Automake does not recognize, are 
+passed through to the generated `Makefile.in' -- this is a powerful extension 
+mechanism. Sometimes Automake will define macros or targets internally. If 
+these are also defined in `Makefile.am' then the definition 
+in `Makefile.am' takes precedence (居前; 領先).
+This feature provides an easy way 
+to tailor (修改; 使合適) specific parts of the output in small ways. 
+
+
+Note, however, that it is a mistake to override parts of the generated code that aren't documented (and thus `exported' by Automake). Overrides like this stand a good chance of not working with future Automake releases. 
+
+
+Automake also scans `configure.in'. Sometimes it uses the information it discovers to generate extra code, and sometimes to provide extra error checking. Automake also turns every AC\_{}SUBST into a `Makefile' variable. This is convenient in more ways than one: not only does it mean that you can refer to these macros in `Makefile.am' without extra work, but, since Automake scans `configure.in' before it reads any `Makefile.am', it also means that special variables and overrides Automake recognizes can be defined once in `configure.in'. 
+
+\section{Introduction to Primaries}
+
+Each type of object that Automake understands has a special root variable name 
+associated with it. \underline{This root is called a primary.} Many actual
+variable names put into `Makefile.am' are constructed by adding various 
+prefixes to a primary. 
+
+
+For instance, scripts--interpreted executable programs--are associated with the SCRIPTS primary. Here is how you would list scripts to be installed in the user's `bindir': 
+
+\begin{Verbatim}[frame=single]
+bin_SCRIPTS = magic-script
+\end{Verbatim}
+
+(Note that the mysterious `bin\_{}' prefix will be discussed later.) 
+
+
+The contents of a primary-derived variable are treated as targets in the resulting `Makefile'. For instance, in our example above, we could generate `magic-script' using sed by simply introducing it as a target: 
+
+\begin{Verbatim}[frame=single]
+bin_SCRIPTS = magic-script
+
+magic-script: magic-script.in
+ sed -e 's/whatever//' < $(srcdir)/magic-script.in > 
+  magic-script
+ chmod +x magic-script
+\end{Verbatim}
+
+\section{The easy primaries}
+
+
+This section describes the common primaries that are relatively easy to understand; the more complicated ones are discussed in the next section. 
+
+\begin{description}
+\item [DATA]
+\ %
+
+This is the easiest primary to understand. A macro of this type lists a number of files which are installed verbatim. These files can appear either in the source directory or the build directory. 
+
+\item [HEADERS]
+\ %
+
+Macros of this type list header files. These are separate from DATA macros because this allows for extra error checking in some cases. 
+
+\item [SCRIPTS]
+\ %
+
+This is used for executable scripts (interpreted programs). These are different from DATA because they are installed with different permissions and because they have the program name transform applied to them (e.g., the `--program-transform-name' argument to configure). Scripts are also different from compiled programs because the latter can be stripped while scripts cannot. 
+
+\item [MANS]
+\ %
+
+This lists man pages. Installing man pages is more complicated than you might 
+think due to the lack of a single common practice. One developer might 
+name a man page in the source tree `foo.man' and then rename to the real 
+name (`foo.1') at install time. Another developer might instead use numeric 
+suffixes in the source tree and install using the same name. Sometimes an 
+alphabetic code follows the numeric suffix (e.g., `quux.3n'); this code 
+must be stripped before determining the correct install directory (this file 
+must still be installed in `\$(man3dir)'). Automake supports all of these 
+modes of operation:
+
+\begin{itemize}
+\item man\_{}MANS can be used when numeric suffixes are already in place: 
+
+\begin{Verbatim}[frame=single]
+man_MANS = foo.1 bar.2 quux.3n
+\end{Verbatim}
+
+\item man1\_{}MANS, man2\_{}MANS, etc., can be used to force renaming at install time. This renaming is skipped if the suffix already begins with the correct number. For instance: 
+
+\begin{Verbatim}[frame=single]
+man1_MANS = foo.man
+man3_MANS = quux.3n
+\end{Verbatim}
+
+Here `foo.man' will be installed as `foo.1' but `quux.3n' will keep its name at install time. 
+\end{itemize}
+
+\item[TEXINFOS]
+\ %
+
+GNU programs traditionally use the Texinfo documentation format, not man pages. Automake has full support for Texinfo, including some additional features such as versioning and install-info support. We won't go into that here except to mention that it exists. See the Automake reference manual for more information. 
+\end{description} 
+
+Automake supports a variety of lesser-used primaries such as JAVA and LISP (and, in the next major release, PYTHON). See the reference manual for more information on these. 
+
+\section{Programs and libraries}
+
+
+The preceding primaries have all been relatively easy to use. Now we'll discuss a more complicated set, namely those used to build programs and libraries. These primaries are more complex because building a program is more complex than building a script (which often doesn't even need building at all). 
+
+
+Use the PROGRAMS primary for programs, LIBRARIES for libraries, and 
+LTLIBRARIES for Libtool libraries
+(see chapter \ref{C_Introducing_GNU_Libtool} Introducing GNU Libtool,
+page \pageref{C_Introducing_GNU_Libtool}). Here is a minimal example: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = doit
+\end{Verbatim}
+ This creates the program doit and arranges to install it in bindir. First make will compile `doit.c' to produce `doit.o'. Then it will link `doit.o' to create `doit'. 
+
+
+Of course, if you have more than one source file, and most programs do,
+then you will want to be able to list them 
+somehow (以某種方式; 用某種方法; 從某種角度). You will do this via 
+the program's SOURCES variable. Each program or library has a set of 
+associated variables whose names are constructed by appending suffixes to 
+the `normalized' name of the program. The normalized name is the name of 
+the object with non-alphanumeric characters changed to 
+underscores (在...下劃線, 強調). For 
+instance, the normalized name of `quux' is `quux', but the normalized name 
+of `install-info' is `install\_{}info'. Normalized names are used because 
+they correspond to make syntax, and, like all macros, Automake 
+propagates (繁殖, 增殖, 使遺傳, 傳播; 使普及) these 
+definitions into the resulting `Makefile.in'. 
+
+
+So if `doit' is to be built from files `main.c' and `doit.c', we would write: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = doit
+doit_SOURCES = doit.c main.c
+\end{Verbatim}
+
+The same holds for libraries. In the zlib package we might make a library called `libzlib.a'. Then we would write: 
+
+\begin{Verbatim}[frame=single]
+lib_LIBRARIES = libzlib.a
+libzlib_a_SOURCES = adler32.c compress.c crc32.c deflate.c \
+deflate.h gzio.c infblock.c infblock.h infcodes.c infcodes.h \
+inffast.c inffast.h inffixed.h inflate.c inftrees.c \
+inftrees.h infutil.c infutil.h trees.c trees.h uncompr.c \
+zconf.h zlib.h zutil.c zutil.h
+\end{Verbatim}
+
+We can also do this with libtool libraries. For instance, suppose we want to build `libzlib.la' instead: 
+
+\begin{Verbatim}[frame=single]
+lib_LTLIBRARIES = libzlib.la
+libzlib_la_SOURCES = adler32.c compress.c crc32.c deflate.c \
+deflate.h gzio.c infblock.c infblock.h infcodes.c infcodes.h \
+inffast.c inffast.h inffixed.h inflate.c inftrees.c \
+inftrees.h infutil.c infutil.h trees.c trees.h uncompr.c \
+zconf.h zlib.h zutil.c zutil.h
+\end{Verbatim}
+
+As you can see, making shared libraries with Automake and Libtool is just as easy as making static libraries. 
+
+
+In the above example, we listed header files in the SOURCES variable. These 
+are ignored (except by make 
+dist\footnote{See chapter \ref{C_Rolling_Distribution_Tarballs} Rolling
+Distribution Tarballs, page \pageref{C_Rolling_Distribution_Tarballs}} )
+but can serve to make your `Makefile.am' a bit clearer (and 
+sometimes shorter, if you aren't installing headers). 
+
+
+Note that you can't use `configure' substitutions (代替; 代用; 替換) in a 
+SOURCES variable. Automake needs to know the static list of files which 
+can be compiled into your program. There are still various ways to 
+conditionally compile files, for instance Automake conditionals or the use of 
+the LDADD variable. 
+
+
+The static list of files is also used in some versions of Automake's automatic dependency tracking. The general rule is that each source file which might be compiled should be listed in some SOURCES variable. If the source is conditionally compiled, it can be listed in an EXTRA variable. For instance, suppose in this example `@FOO\_{}OBJ@' is conditionally set by `configure' to `foo.o' when `foo.c' should be compiled: 
+
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = foo
+foo_SOURCES = main.c
+foo_LDADD = @FOO_OBJ@
+foo_DEPENDENCIES = @FOO_OBJ@
+EXTRA_foo_SOURCES = foo.c
+\end{Verbatim}
+
+In this case, `EXTRA\_{}foo\_{}SOURCES' is used to list sources which are 
+conditionally compiled; this tells Automake that they exist
+\underline{even though} (即使; 雖然) it can't 
+deduce (演繹, 推論) their existence automatically. 
+
+
+In the above example, note the use of the `foo\_{}LDADD' macro. This macro is 
+used to list other object files and libraries which should be linked into 
+the foo program. Each program or library has several such associated 
+macros which can be used to customize the link step; here we list the 
+most common ones: 
+
+\begin{description}
+\item[`\_{}DEPENDENCIES']
+\ %
+
+Extra dependencies which are added to the program's dependency list. If not 
+specified, this is automatically computed based on the value of the 
+program's `\_{}LDADD' macro. 
+
+\item[`\_{}LDADD']
+\ %
+
+Extra objects which are passed to the linker. This is only used by programs
+and shared libraries. 
+
+\item[`\_{}LDFLAGS']
+\ %
+
+Flags which are passed to the linker. This is separate from `\_{}LDADD' to 
+allow `\_{}DEPENDENCIES' to be auto-computed. 
+
+\item[`\_{}LIBADD']
+\ %
+
+Like `\_{}LDADD', but used for static libraries and not programs. 
+\end{description}
+
+You aren't required to define any of these macros. 
+
+\section{Frequently Asked Questions}
+
+
+Experience has shown that there are several common questions that 
+arise (產生, 出現, 形成) as people begin to use automake for their 
+own projects. It seemed prudent (審慎的, 小心) to mention these issues here. 
+
+
+Users often want to make a library (or program, but for some reason it 
+\underline{comes up} (被提出, 被討論) more frequently with libraries) whose 
+sources live in subdirectories: 
+
+\begin{Verbatim}[frame=single]
+lib_LIBRARIES = libsub.a
+libsub_a_SOURCES = subdir1/something.c ...
+\end{Verbatim}
+
+If you try this with Automake 1.4, you'll get an error: 
+
+\begin{Verbatim}[frame=single]
+$ automake
+automake: Makefile.am: not supported: source file 
+    subdir1/something.c is in subdirectory
+\end{Verbatim}
+
+
+For libraries, this problem is mostly simply solve by using libtool 
+convenience libraries. For programs, there is no simple solution. Many people 
+elect (選擇, 決定) to restructure (改組; 重建; 調整) their package in this case.
+
+The next major release of Automake addresses (對付; 滿足) this problem. 
+
+
+Another general problem that comes up is that of setting compilation flags. Most rules have flags--for instance, compilation of C code automatically uses `CFLAGS'. However, these variables are considered user variables. Setting them in `Makefile.am' is unsafe, because the user will expect to be able to override them at will. 
+
+
+To handle this, for each flag variable, Automake introduce an `AM\_{}' version which can be set in `Makefile.am'. For instance, we could set some flags for C and C++ compilation like so: 
+
+\begin{Verbatim}[frame=single]
+AM_CFLAGS = -DFOR_C
+AM_CXXFLAGS = -DFOR_CXX
+\end{Verbatim}
+
+
+
+ Finally, people often ask how to compile a single source file in two different ways. For instance, the `etags.c' file which comes with Emacs can be compiled with different `-D' options to produce the etags and ctags programs. 
+
+
+With Automake 1.4 this can only be done by writing your own compilation rules, like this: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = etags ctags
+etags_SOURCES = etags.c
+ctags_SOURCES =
+ctags_LDADD = ctags.o
+
+etags.o: etags.c
+        $(CC) $(CFLAGS) -DETAGS ...
+
+ctags.o: etags.c
+        $(CC) $(CFLAGS) -DCTAGS ...
+\end{Verbatim}
+
+
+
+This is tedious (冗長乏味的; 使人厭煩的) and hard to maintain for 
+larger programs. Automake 1.5 will support a much more natural approach: 
+
+\begin{Verbatim}[frame=single]
+bin_PROGRAMS = etags ctags
+etags_SOURCES = etags.c
+etags_CFLAGS = -DETAGS
+ctags_SOURCES = etags.c
+ctags_CFLAGS = -DCTAGS
+\end{Verbatim}
+
+
+\section{Multiple directories}
+
+\underline{So far} (到目前為止) , we've 
+only dealt (deal 的過去式與過去分詞)with single-directory 
+projects. Automake can also handle projects with many directories. The 
+variable `SUBDIRS' is used to list the subdirectories which should be 
+built. Here is an example from Automake itself: 
+
+
+\begin{Verbatim}[frame=single]
+SUBDIRS = . m4 tests
+\end{Verbatim}
+
+Automake does not need to know the list of subdirectories statically, so 
+there is no `EXTRA\_{}SUBDIRS' variable. You might think that Automake would 
+use `SUBDIRS' to see which `Makefile.am's to scan, but it actually 
+gets this information from `configure.in'. This means that, if you have a 
+subdirectory which is optionally built, you should still list it 
+unconditionally in your call to AC\_{}OUTPUT and then arrange for it to be 
+substituted (or not, as appropriate) at configure time. 
+
+
+Subdirectories are always built in the order they 
+appear,\marginpar{建構順序依照目錄的順序, 而清除程序則以反向的目錄次序來執行。}
+but cleaning rules (e.g., maintainer-clean) are always run in the reverse order. The reason for this odd reversal is that it is wrong to remove a file before removing all the files which depend on it. 
+
+
+You can put `.' into `SUBDIRS' to control when the objects in the current directory are built, relative to the objects in the subdirectories. In the example above, targets in `.' will be built before subdirectories are built. If `.' does not appear in `SUBDIRS', it is built following all the subdirectories.
+
+\section{Testing}
+
+
+Automake also includes simple support for testing your
+program.\marginpar{Automake 可以對建構出來的程式做些簡單的測試。}
+
+
+The most simple form of this is the `TESTS' variable. This variable holds a 
+list of tests which are run when the user runs make check. Each test is 
+built (if necessary) and then executed. For each test, make prints a 
+single line indicating whether the test has passed or failed. Failure means 
+exiting with a non-zero status, with the special exception that an exit 
+status of `77'\footnote{A number chosen arbitrarily by the Automake developers.}
+means that the test should be ignored. make check also prints a summary 
+showing the number of passes and fails. 
+
+
+Automake also supports the notion of an \textit{xfail}, which is a test which is expected to fail. Sometimes this is useful when you want to track a known failure, but you aren't prepared to fix it right away. Tests which are expected to fail should be listed in both `TESTS' and `XFAIL\_{}TESTS'. 
+
+
+The special prefix `check' can be used with primaries to indicate that the objects should only be built at make check time. For example, here is how you can build a program that will only be used during the testing process: 
+
+
+\begin{Verbatim}[frame=single]
+check_PROGRAMS = test-program
+test_program_SOURCES = ...
+\end{Verbatim}
+
+Automake also supports the use of DejaGNU, the GNU test framework. DejaGNU support can be enabled using the `dejagnu' option: 
+
+
+\begin{Verbatim}[frame=single]
+AUTOMAKE_OPTIONS = dejagnu
+\end{Verbatim}
+
+
+The resulting `Makefile.in' will include code to invoke the runtest program appropriately. 

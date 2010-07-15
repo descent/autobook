@@ -1,0 +1,304 @@
+\chapter{Dynamic Loading}
+
+An increasingly popular way of adding functionality to a project is to give a program the ability to dynamically load plugins, or modules. By doing this your users can extend your project in new ways, which even you perhaps hadn't envisioned. Dynamic Loading, then, is the process of loading compiled objects into a running program and executing some or all of the code from the loaded objects in the same context as the main executable.
+
+This chapter begins with a discussion of the mechanics of dynamic modules and how they are used, and ends with example code for very simple module loading on GNU/Linux, along with the example code for a complementary dynamically loadable module. Once you have read this chapter and understand the principles of dynamic loading, the next chapter will explain how to use GNU Autotools to write portable dynamic module loading code and address some of the shortcomings of native dynamic loading APIs. 
+
+\section{Dynamic Modules}
+
+In order to dynamically load some code into your executable, that code must be compiled in some special but architecture dependent fashion. Depending on the compiler you use and the platform you are compiling for, there are different conventions you must observe in the code for the module, and for the particular combination of compiler options you need to select if the resulting objects are to be suitable for use in a dynamic module. For the rest of this chapter I will concentrate on the conventions used when compiling dynamic modules with GCC on GNU/Linux, which although peculiar to this particular combination of compiler and host architecture, are typical of the sorts of conventions you would need to observe on other architectures or with a different compiler.
+
+With GCC on GNU/Linux, you must compile each of the source files with `-fPIC'(38), the resulting objects must be linked into a loadable module with gcc's `-shared' option: 
+
+\begin{Verbatim}[frame=single]
+$ gcc -fPIC -c foo.c
+$ gcc -fPIC -c bar.c
+$ gcc -shared -o baz.so foo.o bar.o
+\end{Verbatim}
+
+This is pretty similar to how you might go about linking a shared library, except that the `baz.so' module will never be linked with a `-lbaz' option, so the `lib' prefix isn't necessary. In fact, it would probably be confusing if you used the prefix. Similarly, there is no constraint to use any particular filename suffix, but it is sensible to use the target's native shared library suffix (GNU/Linux uses `.so') to make it obvious that the compiled file is some sort of shared object, and not a normal executable.
+
+Apart from that, the only difference between a shared library built for linking at compile-time and a dynamic module built for loading at run-time is that the module must provide known entry points for the main executable to call. That is, when writing code destined for a dynamic module, you must provide functions or variables with known names and semantics that the main executable can use to access the functionality of the module. This is different to the function and variable names in a regular library, which are already known when you write the client code, since the libraries are always written before the code that uses them; a runtime module loading system must, by definition, be able to cope with modules that are written after the code that uses those modules. 
+
+\section{Module Access Functions}
+
+In order to access the functionality of dynamic modules, different architectures provide various APIs to bring the code from the module into the address space of the loading program, and to access the symbols exported by that module.
+
+GNU/Linux uses the dynamic module API introduced by Sun's Solaris operating system, and widely adopted (and adapted!) by the majority of modern Unices(39). The interface consists of four functions. In practice, you really ought not to use these functions, since you would be locking your project into this single API, and the class of machines that supports it. This description is over-simplified to serve as a comparison with the fully portable libltdl API described in 18. Using GNU libltdl. The minutiae are not discussed, because therein lie the implementation peculiarities that spoil the portability of this API. As they stand, these descriptions give a good overview of how the functions work at a high level, and are broadly applicable to the various implementations in use. If you are curious, the details of your machines particular dynamic loading API will be available in its system manual pages. 
+
+\begin{description}
+\item[Function: void * dlopen (const char *filename, int flag)]
+\
+
+This function brings the code from a named module into the address space 
+of the running program that calls it, and returns a handle which 
+is used by the other API functions. If filename is not an absolute path,
+GNU/Linux will search for it in directories named in 
+the `LD\_{}LIBRARY\_{}PATH' environment variable, and then in the 
+standard library directories before giving up.
+
+    The flag argument is made by `OR'ing together various flag bits defined in the system headers. On GNU/Linux, these flags are defined in `dlfcn.h': 
+
+\begin{description}
+\item[`RTLD\_{}LAZY']
+\
+
+    Resolve undefined symbols when they are first used.
+
+\item[`RTLD\_{}NOW']
+\
+
+    If all symbols cannot be resolved when the module is loaded, dlopen will fail and return `NULL'.
+
+\item[`RTLD\_{}GLOBAL']
+\
+
+    All of the global symbols in the loaded module will be available to resolve undefined symbols in subsequently loaded modules.
+\end{description}
+
+\item[Function: void * dlsym (void *handle, char *name)]
+\
+
+    Returns the address of the named symbol in the module which returned handle when it was dlopened. You must cast the returned address to a known type before using it. 
+
+\item [Function: int dlclose (void *handle)]
+\
+
+    When you are finished with a particular module, it can be removed from memory using this function. 
+
+\item[Function: const char * dlerror (void)]
+\
+
+    If any of the other three API calls fails, this function returns a string which describes the last error that occured. 
+
+\end{description}
+
+In order to use these functions on GNU/Linux, you must \#include $<$dlfcn.h$>$ 
+for the function prototypes, and link with `-ldl' to provide the API 
+implementation. Other Unices use `-ldld' or provide the implementation of the 
+API inside the standard C library.
+
+\section{Finding a Module}
+
+When you are writing a program that will load dynamic modules, a major stumbling block is writing the code to find the modules you wish to load. If you are worried about portability (which you must be, or you wouldn't be reading this book!), you can't rely on the default search algorithm of the vendor dlopen function, since it varies from implementation to implementation. You can't even rely on the name of the module, since the module suffix will vary according to the conventions of the target host (though you could insist on a particular suffix for modules you are willing to load).
+
+Unfortunately, this means that you will need to implement your own searching 
+algorithm and always use an absolute pathname when you call dlopen. A 
+widely adopted mechanism is to look for each module in directories listed in 
+an environment variable specific to your application, allowing your users to 
+inform the application of the location of any modules they have written. If 
+a suitable module is not yet found, the application would then default to 
+looking in a list of standard locations -- say, in a subdirectory of the 
+user's home directory, and finally a subdirectory of the application 
+installation tree. For application `foo', you might 
+use `/usr/lib/foo/module.so' -- that is, `\$(pkglibdir)/module.so' if you are 
+using Automake.
+
+This algorithm can be further improved: 
+
+\begin{itemize}
+\item If you try different module suffixes to the named module for every directory in the search path, which will avoid locking your code into a subset of machines that use the otherwise hardcoded module suffix. With this in place you could ask the module loader for module `foomodule', and if it was not found in the first search directory, the module loader could try `foomodule.so', `foomodule.sl' and `foomodule.dll' before moving on to the next directory.
+
+\item You might also provide command line options to your application which will preload modules before starting the program proper or to modify the module search path. For example, GNU M4, version 1.5, will have the following dynamic loading options:
+\end{itemize}
+
+\begin{Verbatim}[frame=single]
+$ m4 --help
+Usage: m4 [OPTION]... [FILE]...
+...
+Dynamic loading features:
+  -M, --module-directory=DIRECTORY  
+   add DIRECTORY to the search path
+  -m, --load-module=MODULE          
+   load dynamic MODULE from M4MODPATH
+...
+Report bugs to <bug-m4@gnu.org>.
+\end{Verbatim}
+
+\section{A Simple GNU/Linux Module Loader}
+
+Something to be aware of, is that when your users write dynamic modules for your application, they are subject to the interface you design. It is very important to design a dynamic module interface that is clean and functional before other people start to write modules for your code. If you ever need to change the interface, your users will need to rewrite their modules. Of course you can carefully change the interface to retain backwards compatibility to save your users the trouble of rewriting their modules, but that is no substitute for designing a good interface from the outset. If you do get it wrong, and subsequently discover that the design you implemented is misconceived (this is the voice of experience speaking!), you will be left with a difficult choice: try to tweak the broken API so that it does work while retaining backwards compatibility, and the maintenance and performace penalty that brings? Or start again with a fresh design born of the experience gained last time, and rewrite all of the modules you have so far?
+
+If there are other applications which have similar module requirements to you, it is worth writing a loader that uses the same interface and semantics. That way, you will (hopefully) be building from a known good API design, and you will have access to all the modules for that other application too, and vice versa.
+
+For the sake of clarity, I have sidestepped any issues of API design for the following example, by choosing this minimal interface: 
+
+\begin{description}
+\item[Function: int run (const char *argument)]
+\
+
+    When the module is successfully loaded a function with the following prototype is called with the argument given on the command line. If this entry point is found and called, but returns `-1', an error message is displayed by the calling program.
+\end{description}
+Here's a simplistic but complete dynamic module loading application you can build for this interface with the GNU/Linux dynamic loading API:
+
+\begin{Verbatim}[frame=single]
+#include <stdio.h>
+#include <stdlib.h>
+#ifndef EXIT_FAILURE
+#  define EXIT_FAILURE        1
+#  define EXIT_SUCCESS        0
+#endif
+
+#include <limits.h>
+#ifndef PATH_MAX
+#  define PATH_MAX 255
+#endif
+
+#include <dlfcn.h>
+/* This is missing from very old Linux libc. */
+#ifndef RTLD_NOW
+#  define RTLD_NOW 2
+#endif
+
+typedef int entrypoint (const char *argument);
+
+/* Save and return a copy of the dlerror() error  message,
+   since the next API call may overwrite the original. */
+static char *dlerrordup (char *errormsg);
+
+int
+main (int argc, const char *argv[])
+{
+  const char modulepath[1+ PATH_MAX];
+  const char *errormsg = NULL;
+  void *module = NULL;
+  entrypoint *run = NULL;
+  int errors = 0;
+
+  if (argc != 3)
+    {
+      fprintf (stderr, "USAGE: main MODULENAME ARGUMENT\n");
+      exit (EXIT_FAILURE);
+    }
+
+  /* Set the module search path. */
+  getcwd (modulepath, PATH_MAX);
+  strcat (modulepath, "/");
+  strcat (modulepath, argv[1]);
+  
+  /* Load the module. */
+  module = dlopen (modulepath, RTLD_NOW);
+  if (!module)
+    {
+      strcat (modulepath, ".so");
+      module = dlopen (modulepath, RTLD_NOW);
+    }
+  if (!module)
+    errors = 1;
+
+  /* Find the entry point. */
+  if (!errors)
+    {
+      run = dlsym (module, "run");
+      /* In principle, run might legitimately be NULL, so
+         I don't use run == NULL as an error indicator. */
+      errormsg = dlerrordup (errormsg);
+
+      if (errormsg != NULL)
+        errors = dlclose (module);
+    }
+
+  /* Call the entry point function. */
+  if (!errors)
+  {
+   int result = (*run) (argv[2]);
+   if (result < 0)
+    errormsg = strdup ("module entry point execution failed");
+   else
+    printf ("\t=> %d\n", result);
+  }
+
+  /* Unload the module, now that we are done with it. */
+  if (!errors)
+    errors = dlclose (module);
+
+  if (errors)
+  {
+   /* Diagnose the encountered error. */
+   errormsg = dlerrordup (errormsg);
+
+   if (!errormsg)
+   {
+    fprintf (stderr, "%s: dlerror() failed.\n", argv[0]);
+    return EXIT_FAILURE;
+   }
+  }
+  
+  if (errormsg)
+    {
+      fprintf (stderr, "%s: %s.\n", argv[0], errormsg);
+      free (errormsg);
+      return EXIT_FAILURE;
+    }
+  
+  return EXIT_SUCCESS;
+}
+
+/* Be careful to save a copy of the error message,
+   since the next API call may overwrite the original. */
+static char *
+dlerrordup (char *errormsg)
+{
+  char *error = (char *) dlerror ();
+  if (error && !errormsg)
+    errormsg = strdup (error);
+  return errormsg;
+}
+\end{Verbatim}
+
+You would compile this on a GNU/Linux machine like so:
+
+\begin{Verbatim}[frame=single]
+$ gcc -o simple-loader simple-loader.c -ldl
+\end{Verbatim}
+
+However, despite making reasonable effort with this loader, and ignoring features which could easily be added, it still has some seemingly insoluble problems:
+
+\begin{enumerate}
+   \item It will fail if the user's platform doesn't have the dlopen API. This also includes platforms which have no shared libraries.
+
+   \item It relies on the implementation to provide a working self-opening mechanism. `dlopen (NULL, RTLD\_{}NOW)' is very often unimplemented, or buggy, and without that, it is impossible to access the symbols of the main program through the `dlsym' mechanism.
+
+   \item It is quite difficult to figure out at compile time whether the target host needs `libdl.so' to be linked. 
+\end{enumerate}
+
+I will use GNU Autotools to tackle these problems in the next chapter. 
+
+\section{A Simple GNU/Linux Dynamic Module}
+
+As an appetiser for working with dynamic loadable modules, here is a minimal module written for the interface used by the loader in the previous section: 
+
+\begin{Verbatim}[frame=single]
+#include <stdio.h>
+
+int run (const char *argument)
+{
+  printf ("Hello, %s!\n", argument);
+  return 0;
+}
+\end{Verbatim}
+
+Again, to compile on a GNU/Linux machine:
+
+\begin{Verbatim}[frame=single]
+$ gcc -fPIC -c simple-module.c
+$ gcc -shared -o simple-module.so
+\end{Verbatim}
+
+Having compiled both loader and module, a test run looks like this:
+
+\begin{Verbatim}[frame=single]
+$ ./simple-loader simple-module World
+Hello, World!
+        => 0
+\end{Verbatim}
+
+If you have a GNU/Linux system, you should experiment with the simple examples from this chapter to get a feel for the relationship between a dynamic module loader and its modules -- tweak the interface a little; try writing another simple module. If you have a machine with a different dynamic loading API, try porting these examples to that machine to get a feel for the kinds of problems you would encounter if you wanted a module system that would work with both APIs.
+
+The next chapter will do just that, and develop these examples into a fully portable module loading system with the aid of GNU Autotools. In 20.1 A Module Loading Subsystem, I will add a more realistic mdoule loader into the Sic project last discussed in 12. A Large GNU Autotools Project. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}

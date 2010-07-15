@@ -1,0 +1,69 @@
+\chapter{Introduction}
+Autoconf, Automake and Libtool are packages for making your software more portable and to simplify building it--usually on someone else's system. Software portability and effective build systems are crucial aspects of modern software engineering practice. It is unlikely that a software project would be started today with the expectation that the software would run on only one platform. Hardware constraints may change the choice of platform, new customers with different kinds of systems may emerge or your vendor might introduce incompatible changes in newer versions of their operating system. In addition, tools that make building software easier and less error prone are valuable. 
+
+
+Autoconf is a tool that makes your packages more portable by performing tests to discover system characteristics before the package is compiled. Your source code can then adapt to these differences. 
+
+
+Automake is a tool for generating `Makefile's--descriptions of what to build--that conform to a number of standards. Automake substantially simplifies the process of describing the organization of a package and performs additional functions such as dependency tracking between source files. 
+
+
+Libtool is a command line interface to the compiler and linker that makes it easy to portably generate static and shared libraries, regardless of the platform it is running on. 
+
+\section{What this book is}
+This book is a tutorial for Autoconf, Automake and Libtool, hereafter referred to as the GNU Autotools. The GNU manuals that accompany each tools adequately document each tool in isolation. Until now, there has not been a guide that has described how these tools work together. 
+
+As these tools have evolved over the years, design decisions have been made by contributors who clearly understand the associated problems, but little documentation exists that captures why things are the way the are. By way of example, one might wonder why some Autoconf macros use shell constructs like: 
+
+\begin{verbatim}
+if test "x$var" = xbar; then
+  echo yes 1>&5
+fi
+\end{verbatim}
+
+ instead of the simpler: 
+
+ 
+\begin{verbatim}
+if [ $var = bar ]; then
+  echo yes 1>&5
+fi
+\end{verbatim}
+
+Much of this reasoning is recorded in this book.
+
+\section{What the book is not}
+
+
+This book is not a definitive reference to Autoconf, Automake or Libtool. Attempting to do so would fill this book with information that is doomed to obsolescence. For instance, you will not find a description of every predefined macro provided by Autoconf. Instead, the book will attempt to help you understand any macro you encounter and, instead, influence how you approach software portability and package building. The GNU manual for each tool should be consulted as a reference. 
+
+
+This book briefly introduces pertinent concepts, but does not attempt to teach them comprehensively. You will find an introduction to writing `Makefile's and Bourne shell scripts, but you should consult other references to become familiar with these broader topics. 
+
+\section{Who should read this book}
+
+
+Revealing the mystery around the GNU Autotools is likely to raise the interest of a wide audience of software developers, system administrators and technical managers. 
+
+
+Software developers, especially those involved with free software projects, will find it valuable to understand how to use these tools. The GNU Autotools are enjoying growing popularity in the free software community. Developers of in-house projects can reap the same benefits by using these tools. 
+
+
+System administrators can benefit from a working knowledge of these tools -- a common task for system administrators is to compile and install packages which commonly use the GNU Autotools framework. Occasionally, a feature test may produce a false result, leading to a compilation error or a misbehaving program. Some hacking is usually sufficient to get the package to compile, but knowing the correct way to fix the problem can assist the package maintainer. 
+
+
+Finally, technical managers may find the discussion to be an insight into the complex nature of software portability and the process of building a large project. 
+
+\section{How this book is organized}
+
+
+Like any good tutorial, this book starts with an explanation of simple concepts and builds on these fundamentals to progress to advanced topics. 
+
+
+Part I of the book provides a history of the development of these tools and why they exist. 
+
+
+Part II contains most of the book's content, starting with an introduction to concepts such as `Makefile's and configuration triplets. Later chapters introduce each tool and how to manage projects of varying sizes using the tools in concert. Programs written in C and C++ can be non-portable if written carelessly. Chapters 14 and 15 offer guidelines for writing portable programs in C and C++, respectively. 
+
+
+Part III provides information that you are unlikely to find in any other documentation, that is based on extensive experience with the tools. It embodies chapters that treat some advanced, yet essential, concepts such as the m4 macro processor and how to write portable Bourne shell scripts. Chapter 23 outlines how to migrate an existing package to the GNU Autotools framework and will be of interest to many developers. One of the most mystifying aspects of using the GNU Autotools for building packages in a cross-compilation environment. This is de-mystified in Chapter 25. 

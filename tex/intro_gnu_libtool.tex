@@ -1,0 +1,1107 @@
+\chapter{Introducing GNU Libtool}\label{C_Introducing_GNU_Libtool}
+
+
+Libtool takes care of all the peculiarities ({\MbQ\cH212}\z{\MbQ\cH52}, {\MbQ\cH212}\z{\McQ\cH148}) of creating,
+linking and loading shared and static libraries across a great number of 
+platforms, providing a uniform ({\McQ\cH248}\z{\MbQ\cH95}\z{\MbQ\cH237}) command line interface to the developer.
+By using Libtool to manage your project libraries, you only need to concern 
+yourself with Libtool's interface: when someone else builds your project on a 
+platform with a different library architecture, Libtool invokes that 
+platform's compiler and linker with the correct environment and command line 
+switches. It will install libraries and library using binaries according to 
+the conventions of the host platform, and follows that platform's rules for 
+library versioning and library interdependencies ({\MdQ\cH19}\z{\MbQ\cH243}\z{\MaQ\cH89}\z{\MjQ\cH10}). 
+
+
+
+Libtool empowers ({\MfQ\cH164}\z{\MbQ\cH158}, {\MaQ\cH122}\z{\McQ\cH114}, {\MaQ\cH85}\z{\McQ\cH63}\z{\MeQ\cH68}) you to treat a library as an 
+implementation ({\MaQ\cH234}\z{\MbQ\cH65}) of a well defined interface of your choosing. This 
+Libtool library may be manifest ({\MfQ\cH122}... {\MaQ\cH127}\z{\MaQ\cH112}\z{\McQ\cH140}\z{\MaQ\cH192}) as a collection of compiler 
+objects, a static \textbf{ar} archive, or a position independent runtime 
+loadable object. By definition, native libraries are fully supported by 
+Libtool since they are an implementation detail of the Libtool library 
+abstraction. It's just that until Libtool achieves complete world domination
+({\MbQ\cH88}\z{\McQ\cH186}, {\McQ\cH36}\z{\MbQ\cH181}, {\MfQ\cH173}\z{\MaQ\cH132}; {\MaQ\cH105}\z{\MaQ\cH145}), you might need to \underline{bear in mind} ({\McQ\cH112}\z{\MaQ\cH82})
+what is going on behind the command line interface when you first add 
+Libtool support to your project. 
+
+The sheer ({\MaQ\cH114}\z{\MbQ\cH205}\z{\MbQ\cH237}; {\MhQ\cH211}\z{\MhQ\cH199}\z{\MbQ\cH237}) number of uses of the word `library' in this book 
+could be easily very confusing. In this chapter and throughout ({\MjQ\cH90}\z{\MaQ\cH163}, {\MjQ\cH90}\z{\MdQ\cH48})
+the rest of the book, I will refer to various kinds of libraries as follows: 
+
+\begin{description}
+\item[`native']
+\ %
+
+Low level libraries, that is, libraries provided by the host architecture. 
+
+\item[`Libtool library']
+\ %
+
+The kind of library built by Libtool. This encompasses ({\MdQ\cH168}\z{\MeQ\cH12}) both the shared 
+and static native components of the implementation of the named library. 
+
+\item[`pseudo-library']
+\ %
+
+The high level `\textbf{.la}' file produced by Libtool. The `pseudo-library' 
+is not a library \underline{in its own right} ({\MfQ\cH86}\z{\MbQ\cH133}\z{\McQ\cH153}\z{\MbQ\cH237}\z{\MbQ\cH145}\z{\MaQ\cH75} ({\McQ\cH55}\z{\McQ\cH221}\z{\McQ\cH166}\z{\McQ\cH172}\z{\MeQ\cH117}\z{\MeQ\cH108}) ),
+but is treated as if it were from 
+outside the Libtool interface. 
+
+\end{description}
+
+Futhermore\marginpar{{\MaQ\cH170}\z{\McQ\cH63}\z{\MbQ\cH72}\z{\MjQ\cH152}\z{\MaQ\cH229} furthermore ({\McQ\cH55}\z{\MaQ\cH47}, {\MbQ\cH164}\z{\MaQ\cH213}, {\MaQ\cH121}\z{\McQ\cH54})}, in the 
+context of Libtool, there is another subtle ({\McQ\cH216}\z{\MfQ\cH154}\z{\MfQ\cH195}\z{\MbQ\cH237}) (but important) 
+distinction to be drawn: 
+
+\begin{description}
+
+\item[`static library']
+\ %
+
+A Libtool library which has no shared archive component. 
+
+\item[`static archive']
+\ %
+
+The static component of a Libtool library. 
+\end{description}
+
+Many developers use Libtool as a black box which requires adding a few macros 
+to `configure.in' and tweaking ({\McQ\cH75}\z{\MfQ\cH62}) a project's `Makefile.am'. The next 
+chapter addresses that school of thought in more detail. In this chapter I 
+will talk a little about the inner workings of Libtool, and show you how it 
+can be used directly from your shell prompt -- how to build various kinds of 
+library, and how those libraries can be used by an application. Before you can 
+do any of this, you need to create a libtool script that is tailored ({\MaQ\cH236}\z{\MaQ\cH100}\z{\MbQ\cH237};
+{\MaQ\cH175}\z{\McQ\cH153}\z{\MbQ\cH237}) to the platform you are using it from. 
+
+\section{Creating libtool}\label{S_Creating_libtool}
+
+
+When you install a distribution of Libtool on your development machine, a host specific libtool program is installed. The examples in the rest of this chapter use this installed instance of libtool. 
+
+
+When you start to use Libtool in the build process of your own projects, you shouldn't require that libtool be installed on the user's machine, particularly since they may have a different libtool version to the one used to develop your project. Instead, distribute some of the files installed by the Libtool distribution along with your project, and custom build a libtool script on the user's machine before invoking \textbf{./libtool} to build any objects. If you use 
+Autoconf and Automake, these details are taken care of automatically
+(see chapter \ref{C_Using GNU Libtool with} Using GNU Libtool 
+with `configure.in' and `Makefile.am', page \pageref{C_Using GNU Libtool with}).
+Otherwise you should copy the 
+following files from your own Libtool installation into the source tree 
+of your own project:
+
+\medskip
+\begin{tabular}{|p{\textwidth}|}
+\hline
+{\McQ\cH165}\z{\McQ\cH248}\z{\MbQ\cH168}\z{\MbQ\cH237}\z{\MbQ\cH60}\z{\MbQ\cH50}\z{\MaQ\cH223}\z{\MdQ\cH100}\z{\MbQ\cH117}\z{\McQ\cH122}\z{\MaQ\cH202}\z{\MbQ\cH224} libtool {\MbQ\cH29}\z{\MgQ\cH90}\z{\MaQ\cH124}\z{\MaQ\cH76}\z{\MaQ\cH83}\z{\MbQ\cH137}\z{\McQ\cH97}\z{\MaQ\cH53}\z{\MaQ\cH135},
+{\McQ\cH98}\z{\MaQ\cH108}\z{\MbQ\cH29}\z{\McQ\cH13}\z{\McQ\cH248}\z{\MaQ\cH95} libtool script {\MaQ\cH74}\z{\MjQ\cH135}\z{\MaQ\cH250}\z{\MaQ\cH46}\z{\MaQ\cH176}\z{\MbQ\cH237}\z{\MbQ\cH19}\z{\MaQ\cH171}\z{\MaQ\cH100}\z{\McQ\cH68}\z{\McQ\cH118}\z{\MbQ\cH19}\z{\MaQ\cH171}\z{\MbQ\cH243}\z{\McQ\cH201}\z{\MbQ\cH237}\z{\MbQ\cH9}\z{\MaQ\cH84}{\MaQ\cH1}\zZ
+{\McQ\cH55}\z{\MaQ\cH47}\z{\McQ\cH219}\z{\McQ\cH98}\z{\MaQ\cH248}\z{\McQ\cH65}\z{\MeQ\cH208}\z{\MbQ\cH234}\z{\MbQ\cH4}\z{\MbQ\cH237} libtool {\MbQ\cH237}\z{\MgQ\cH47}\z{\MaQ\cH60}\z{\MgQ\cH102}\z{\MbQ\cH144} copy {\MaQ\cH131}\z{\McQ\cH118}\z{\McQ\cH108}\z{\MbQ\cH229}\z{\MbQ\cH237}\z{\MbQ\cH241}\z{\MjQ\cH147}\z{\MaQ\cH45},
+{\McQ\cH55}\z{\MaQ\cH85}\z{\MbQ\cH224}\z{\McQ\cH54}\z{\MaQ\cH90}\z{\MbQ\cH117}\z{\MbQ\cH224}\z{\McQ\cH165}\z{\MaQ\cH60}\z{\MgQ\cH102}\z{\MbQ\cH144}\z{\MaQ\cH86}\z{\MaQ\cH85}\z{\MbQ\cH224} libtool {\McQ\cH170}\z{\McQ\cH55}\z{\McQ\cH168}\z{\MaQ\cH124} libtool {\MbQ\cH211}\z{\MaQ\cH75},
+{\McQ\cH55}\z{\MaQ\cH46}\z{\MaQ\cH85}\z{\MbQ\cH224}\z{\MbQ\cH133}\z{\MbQ\cH156}\z{\MaQ\cH44}\z{\MbQ\cH237} libtool, {\MjQ\cH102}\z{\MaQ\cH110}\z{\MbQ\cH234}\z{\MbQ\cH4}\z{\McQ\cH54}\z{\McQ\cH68}\z{\MaQ\cH85}\z{\MbQ\cH224}\z{\McQ\cH54}\z{\MbQ\cH237} libtool {\MhQ\cH23}\z{\MbQ\cH133}\z{\MaQ\cH46}\z{\MaQ\cH176}\z{\MbQ\cH237}\z{\MaQ\cH189}\z{\McQ\cH230}{\MaQ\cH1}\\
+\hline
+\end{tabular}
+
+\begin{verbatim}
+$ ls /usr/local/share/libtool
+config.guess   config.sub   libltdl   ltconfig   ltmain.in
+$ cp /usr/local/share/libtool/config.* /usr/local/share/libtool/lt* .
+$ ls
+config.guess   config.sub   ltconfig   ltmain.in
+\end{verbatim}
+
+
+You must then arrange for your project build process to create an instance of 
+libtool on the user's machine, so that it is dependent on their target system 
+and not your development machine. The creation process requires the four 
+files you just added to your project. Let's create a libtool instance by hand,
+so that you can see what is involved: 
+
+\medskip
+\begin{tabular}{|p{\textwidth}|}
+\hline
+{\MhQ\cH245}\z{\McQ\cH241}\z{\MaQ\cH50}\z{\MiQ\cH229}: {\MdQ\cH53}\z{\MbQ\cH46}\z{\McQ\cH226}\z{\MbQ\cH209}\z{\MdQ\cH53}\z{\MbQ\cH237}\z{\MbQ\cH29}\z{\MgQ\cH90}\z{\McQ\cH6}\z{\MeQ\cH229}\z{\MbQ\cH29}\z{\McQ\cH13}\z{\McQ\cH248}\z{\MaQ\cH95} libtool {\MbQ\cH237}\z{\MaQ\cH245}\z{\McQ\cH241} ({\MbQ\cH224}\z{\MaQ\cH86}\z{\MaQ\cH207}\z{\McQ\cH87} libtool),
+{\McQ\cH55}\z{\McQ\cH165}\z{\MaQ\cH95}\z{\MaQ\cH245}\z{\McQ\cH241}\z{\MbQ\cH117}\z{\MjQ\cH135}\z{\MaQ\cH250}\z{\MaQ\cH85}\z{\MbQ\cH224}\z{\McQ\cH54}\z{\MbQ\cH237}\z{\MbQ\cH156}\z{\MaQ\cH194}\z{\McQ\cH55}\z{\MbQ\cH223}\z{\MbQ\cH222}, {\MbQ\cH70}\z{\MaQ\cH74}\z{\MbQ\cH117}\z{\MaQ\cH184}\z{\MaQ\cH85}\z{\MbQ\cH224}\z{\McQ\cH54}\z{\MbQ\cH237}\z{\MbQ\cH19}\z{\MaQ\cH171}\z{\MbQ\cH127}\z{\MbQ\cH243}\z{\MaQ\cH89}\z{\MbQ\cH52},
+{\McQ\cH55}\z{\MaQ\cH46}\z{\MbQ\cH117}\z{\MaQ\cH184}\z{\MbQ\cH234}\z{\MbQ\cH4}\z{\McQ\cH54}\z{\MbQ\cH237}\z{\MbQ\cH19}\z{\MaQ\cH171}\z{\MbQ\cH127}\z{\MbQ\cH243}\z{\MaQ\cH89}\z{\MbQ\cH52}{\MaQ\cH1} {\McQ\cH165}\z{\MaQ\cH95}\z{\MbQ\cH165}\z{\MkQ\cH9}\z{\McQ\cH219}\z{\McQ\cH98}\z{\McQ\cH251}\z{\MaQ\cH95}\z{\MdQ\cH53}\z{\MdQ\cH143}\z{\MdQ\cH143}\z{\MaQ\cH139}\z{\McQ\cH170}\z{\MaQ\cH86}\z{\MbQ\cH237}\z{\MgQ\cH102}\z{\MbQ\cH144}{\MaQ\cH1}\zZ
+{\MaQ\cH196}\z{\MbQ\cH209}\z{\MbQ\cH66}\z{\MaQ\cH98}\z{\MbQ\cH117}\z{\MbQ\cH71}\z{\MaQ\cH141}\z{\MbQ\cH29}\z{\McQ\cH13} libtool {\MbQ\cH237}\z{\MaQ\cH245}\z{\McQ\cH241}, {\MbQ\cH70}\z{\MaQ\cH74}\z{\MaQ\cH170}\z{\MaQ\cH74}\z{\MbQ\cH245}\z{\MaQ\cH131}\z{\MbQ\cH127}\z{\McQ\cH181}\z{\MaQ\cH60}\z{\MaQ\cH57}\z{\MbQ\cH56}\z{\MbQ\cH125}\z{\MbQ\cH234}\z{\MbQ\cH222}{\MaQ\cH1}\\
+\hline
+\end{tabular}
+
+
+
+\begin{verbatim}
+$ ./config.guess
+hppa1.1-hp-hpux10.20
+$ ./ltconfig --disable-static --with-gcc ./ltmain.sh hppa1.1-hp-hpux10.20
+checking host system type... hppa1.1-hp-hpux10.20
+checking build system type... hppa1.1-hp-hpux10.20
+checking whether ln -s works... yes
+checking for ranlib... ranlib
+checking for BSD-compatible nm... /usr/bin/nm -p
+checking for strip... strip
+checking for gcc... gcc
+checking whether we are using GNU C... yes
+checking for objdir... .libs
+checking for object suffix... o
+checking for executable suffix... no
+checking for gcc option to produce PIC... -fPIC
+checking if gcc PIC flag -fPIC works... yes
+checking if gcc static flag -static works... yes
+checking if gcc supports -c -o file.o... yes
+checking if gcc supports -c -o file.lo... yes
+checking if gcc supports -fno-rtti -fno-exceptions ... no
+checking for ld used by GCC... /opt/gcc-lib/hp821/2.7.0/ld
+checking if the linker (/opt/gcc-lib/hp821/2.7.0/ld) is GNU ld... no
+checking whether the linker (/opt/gcc-lib/hp821/2.7.0/ld) supports \
+shared libraries... yes
+checking how to hardcode library paths into programs... relink
+checking whether stripping libraries is possible... yes
+checking for /opt/gcc-lib/hp821/2.7.0/ld option to reload object \
+files... -r
+checking dynamic linker characteristics... hpux10.20 dld.sl
+checking command to parse /usr/bin/nm -p output... ok
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+creating libtool
+$ ls
+config.guess   config.sub   ltconfig
+config.log     libtool      ltmain.sh
+$ ./libtool --version
+ltmain.sh (GNU libtool) 1.3c (1.629 1999/11/02 12:33:04)
+\end{verbatim}
+
+The examples in this chapter are all performed on a HP-UX system, but the 
+principles depicted ({\MfQ\cH183}\z{\MbQ\cH229}; {\MoQ\cH173}\z{\MaQ\cH124}) are representative ({\MaQ\cH72}\z{\McQ\cH91}\z{\MbQ\cH52}\z{\MbQ\cH237}, {\MdQ\cH116}\z{\MeQ\cH25}\z{\MbQ\cH237}) of any 
+of the platforms to which Libtool has been ported
+(see Appendix \ref{platforms} PLATFORMS (page \pageref{platforms})). 
+
+
+Often you don't need to specify any options, and if you omit ({\McQ\cH179}\z{\MgQ\cH213}; {\MbQ\cH244}\z{\MhQ\cH73}) the 
+configuration triplet (see section \ref{S_Configuration_Names} Configuration
+Names, page \pageref{S_Configuration_Names}), \textbf{ltconfig} will run 
+config.guess itself. There are several options you can specify which 
+affect the generated libtool, See section `Invoking ltconfig' in 
+The \textbf{Libtool Manual}. Unless your project has special requirements,
+you can usually use the simplified: 
+
+\medskip
+\begin{tabular}{|p{\textwidth}|}
+\hline
+{\MhQ\cH245}\z{\McQ\cH241}\z{\MaQ\cH50}\z{\MiQ\cH229}: {\McQ\cH166}\z{\MbQ\cH18}\z{\MaQ\cH46}\z{\McQ\cH219}\z{\McQ\cH98}\z{\MbQ\cH78}\z{\MaQ\cH236} options, {\McQ\cH74}\z{\MdQ\cH53}\z{\McQ\cH179}\z{\MgQ\cH213} configuration triplet
+Configuration Names
+(ex: hppa1.1-hp-hpux10.20), ltconfig {\MbQ\cH125}\z{\McQ\cH65}\z{\MeQ\cH208}\z{\MaQ\cH207}\z{\McQ\cH87} onfig.guess{\MaQ\cH1}\zZ
+{\MdQ\cH53}\z{\MaQ\cH170}\z{\MaQ\cH74}\z{\MbQ\cH78}\z{\MaQ\cH236}\z{\MbQ\cH39}\z{\MaQ\cH214} options, {\McQ\cH126}\z{\MaQ\cH161}\z{\McQ\cH53} Libtool Manual, Invoking ltconfig {\McQ\cH165}\z{\McQ\cH248}\z{\MaQ\cH252}\z{\McQ\cH20}{\MaQ\cH1}\zZ
+{\McQ\cH206}\z{\McQ\cH221}\z{\MdQ\cH53}\z{\MbQ\cH237}\z{\McQ\cH108}\z{\MbQ\cH229}\z{\MbQ\cH127}\z{\MbQ\cH212}\z{\MaQ\cH129}\z{\MbQ\cH237}\z{\McQ\cH219}\z{\MbQ\cH176}, {\McQ\cH98}\z{\MaQ\cH46}\z{\MbQ\cH205}\z{\MaQ\cH170}\z{\MaQ\cH74}\z{\McQ\cH21}\z{\MaQ\cH192}\z{\MbQ\cH237}\z{\MaQ\cH207}\z{\McQ\cH87}: \\
+\hline
+\end{tabular}
+
+
+ 
+\begin{verbatim}
+$ ./ltconfig ./ltmain.sh
+\end{verbatim}
+
+
+
+With the current release of Libtool, you must be careful that `\$CC' is set 
+to the same value when you call \textbf{ltconfig} as when you invoke the 
+libtool it generates, otherwise libtool will use the compiler specified 
+in `\$CC' currently, but with the semantics probed by \textbf{ltconfig} for 
+the compiler specified in `\$CC' at the time it was executed. 
+
+\section{The Libtool Library}\label{S_Ther_Libtool_Library}
+
+
+A Libtool library is built from Libtool objects in the same way that a native (non-Libtool) library is built from native objects. Building a Libtool library with libtool is as easy as building an old style static archive. Generally, each of the sources is compiled to a Libtool object, and then these objects are combined to create the library. 
+
+
+If you want to try this to see what libtool does on your machine, put the following code in a file `hello.c', in a directory of its own, and run the example shell commands from there: 
+
+
+ 
+\begin{verbatim}
+#include <stdio.h>
+
+void hello (char *who)
+{
+ printf ("Hello, %s!\n", who);
+}
+\end{verbatim}
+
+The traditional way to make a (native) static library is as follows: 
+
+\begin{Verbatim}[frame=single]
+$ gcc -c hello.c
+$ ls
+hello.c  hello.o
+$ ar cru libhello.a hello.o
+$ ranlib libhello.a
+$ ls
+hello.c   hello.o   libhello.a
+\end{Verbatim}
+
+ Notice that even when I just want to build an old static archive, I need to 
+ know that, in common with most Unices, I have to bless\footnote{Generally
+ this involves indexing the symbols exported from the archive for faster 
+ linking, and to allow the archived objects to reference symbols from other 
+ objects earlier in the same archive.} my library with \textbf{ranlib} to make 
+ it work optimally on HP-UX. 
+
+
+Essentially, Libtool supports the building of three types of library:
+\textbf{shared libraries}; \textbf{static libraries}; and \textbf{convenience
+libraries}. In the following sections I will talk about
+each \underline{in turn}({\MaQ\cH89}\z{\MbQ\cH159}, {\MjQ\cH51}\z{\MaQ\cH131}), but first you will need to understand 
+how to create and use position independent code, as explained in the next 
+section. 
+
+\subsection{Position Independent Code}\label{SS_Position_Independent_Code}
+
+On most architectures, when you compile source code to object code, you need 
+to specify whether the object code should be position independent or not.
+There are occasional architectures which don't make the distinction, usually 
+because all object code is position independent \underline{by virtue of} ({\MbQ\cH226}\z{\MbQ\cH107};
+{\MfQ\cH86}\z{\MiQ\cH142}) the ABI\footnote{Application Binary Interface: the layout of the bytes 
+that comprise ({\MdQ\cH168}\z{\MdQ\cH214}, {\MdQ\cH168}\z{\MfQ\cH142}) binary objects and executables: 32 or 64 bit words;
+procedure calling conventions; memory alignment rules; system call interface;
+order and type of the binary sections (data, code etc) and so on.}, or less 
+often because the load address of the object is fixed at compile time (which 
+implies that shared libraries are not supported by such a platform). If an 
+object is compiled as position independent code (PIC), then the operating 
+system can load the object at any address in preparation for execution. This 
+involves a time overhead, in replacing direct address references with relative 
+addresses at compile time, and a space overhead, in maintaining information to 
+help the runtime loader fill in the unresolved addresses at runtime.
+Consequently ({\McQ\cH33}\z{\MbQ\cH139}) , PIC objects are usually slightly larger and slower at 
+runtime than the equivalent non-PIC object. The advantage of sharing library 
+code on disk and in memory outweigh ({\MbQ\cH170}... {\MbQ\cH121}\z{\McQ\cH189}\z{\McQ\cH98} ({\MbQ\cH67}\z{\MbQ\cH121}\z{\MbQ\cH127}\z{\MaQ\cH103}\z{\MdQ\cH77}\z{\McQ\cH16})) these 
+problems as soon as the PIC object code in shared libraries is reused. 
+
+PIC compilation is exactly what is required for objects which will become part of a shared library. Consequently, libtool builds PIC objects for use in shared libraries and non-PIC objects for use in static libraries. Whenever libtool instructs the compiler to generate a PIC object, it also defines the preprocessor symbol, `PIC', so that assembly code can be aware of whether it will reside in a PIC object or not. 
+
+
+Typically, as libtool is compiling sources, it will generate a `.lo' object, as PIC, and a `.o' object, as non-PIC, and then it will use the appropriate one of the pair when linking executables and libraries of various sorts. On architectures where there is no distinction, the `.lo' file is just a soft link to the `.o' file. 
+
+
+In practice, you can link PIC objects into a static archive for a small 
+overhead in execution and load speed, and often you can similarly link non-PIC 
+objects into shared archives. If you find that you need to do this, libtool 
+provides several ways to override the default behavior
+(see section \ref{S_Creating_libtool} Creating libtool
+(page \pageref{S_Creating_libtool})). 
+
+\subsection{Creating Shared Libraries}
+
+From Libtool's point of view, the term `shared library' is somewhat of a 
+misnomer ({\MiQ\cH207}\z{\McQ\cH8}; {\MaQ\cH65}\z{\MaQ\cH177}\z{\MiQ\cH207}\z{\MjQ\cH45}; {\MeQ\cH159}\z{\MjQ\cH152}\z{\MaQ\cH226}\z{\MaQ\cH177}). Since Libtool is intended to abstract away 
+the details of library building, it doesn't matter whether Libtool 
+is building a shared library or a static archive. Of course, Libtool will 
+always try to build a shared library by default on the platforms to which it 
+has been ported (see appendix \ref{platforms} PLATFORMS
+(page \pageref{platforms})), but will equally fall back to building a static 
+archive if the host architecture does not support shared libraries, or if the 
+project developer deliberately ({\MbQ\cH93}\z{\MbQ\cH60}\z{\MaQ\cH203}, {\MiQ\cH122}\z{\MbQ\cH60}\z{\MaQ\cH203}) configures Libtool to always 
+build static archives only. These libraries are more properly 
+called `Libtool libraries'; the underlying native library will usually be a 
+shared library, except as described above. 
+
+
+To create a Libtool library on my HP-UX host, or indeed anywhere else that libtool works, run the following commands: 
+
+\begin{Verbatim}
+$ rm hello.o libhello.a
+$ libtool gcc -c hello.c
+mkdir .libs
+gcc -c  -fPIC -DPIC hello.c -o .libs/hello.lo
+gcc -c hello.c -o hello.o >/dev/null 2>&1
+mv -f .libs/hello.lo hello.lo
+$ ls
+hello.c   hello.lo   hello.o
+$ libtool gcc -rpath /usr/local/lib -o libhello.la hello.lo
+rm -fr .libs/libhello.la .libs/libhello.* .libs/libhello.*
+/opt/gcc-lib/hp821/2.7.0/ld -b +h libhello.sl.0 +b /usr/local/lib \
+-o .libs/libhello.sl.0.0  hello.lo
+(cd .libs && rm -f libhello.sl.0 && ln -s libhello.sl.0.0 libhello.sl.0)
+(cd .libs && rm -f libhello.sl && ln -s libhello.sl.0.0 libhello.sl)
+ar cru .libs/libhello.a  hello.o
+ranlib .libs/libhello.a
+creating libhello.la
+(cd .libs && rm -f libhello.la && ln -s ../libhello.la libhello.la)
+$ ls
+hello.c   hello.lo   hello.o   libhello.la
+\end{Verbatim}
+
+This example illustrates several features of libtool. Compare the command line
+syntax with the previous example (see section \ref{S_Ther_Libtool_Library}
+The Libtool Library, page \pageref{S_Ther_Libtool_Library}). They are both
+very similar. Notice, however, that when compiling the `hello.c' source file, libtool creates two objects. The first, `hello.lo', is the Libtool object which we use for Libtool libraries, and the second, `hello.o' is a standard object. On HP-UX, libtool knows that Libtool objects should be compiled with position independent code, hence the extra switches when creating the first object. 
+
+\begin{quote}
+When you run libtool from the command line, you must also specify a compiler 
+for it to call. Similarly when you create a libtool script with ltconfig, a 
+compiler is chosen and interrogated ({\MaQ\cH246}\z{\MaQ\cH189}; {\McQ\cH148}\z{\MaQ\cH189}) to discover what 
+characteristics it has. See section \ref{S_Creating_libtool} Creating libtool
+(page \pageref{S_Creating_libtool}). 
+
+Prior to release 1.4 of Libtool, ltconfig probed ({\MfQ\cH171}\z{\MgQ\cH191}) the build machine for a
+suitable compiler, by searching first for gcc and then cc. The functionality 
+of ltconfig is being migrated into the `AC\_{}PROG\_{}LIBTOOL' macro, such 
+that there will be no ltconfig script in Libtool release 1.5. The current 
+release is part way between the two. In all cases, you can specify a 
+particular compiler by setting the `CC' environment variable. 
+
+
+It is important to continue to use the same compiler when you run libtool as the compiler that was used when you created the libtool script. If you create the script with `CC' set to gcc, and subsequently try to compile using, say: 
+
+ 
+\begin{verbatim}
+$ libtool c89 -rpath /usr/local/lib -c hello.c
+\end{verbatim}
+
+libtool will try to call c89 using the options it discovered for gcc. Needless 
+to say, that doesn't work! 
+\end{quote}
+
+The link command specifies a Libtool library target, `libhello.la', compiled 
+from a single Libtool object, `hello.lo'. Even so, libtool knows how to build 
+both static and shared archives on HP-UX -- underneath ({\MaQ\cH202}... {\MaQ\cH45}\z{\McQ\cH222}) the libtool 
+abstraction both are created. libtool also understands the particulars of 
+library linking on HP-UX: the static archive, `libhello.a', is blessed;
+the system (and compiler) dependent compiler and linker flags, versioning 
+scheme and .sl extension are utilised for the shared archive, `libhello.sl'.
+On another host, all of these details may be completely different, yet with 
+exactly the same invocation, libtool will call the native tools with the 
+appropriate options to achieve the same result. Try it on your own machines 
+to see any differences. 
+
+
+It is the `-rpath' switch that tells libtool that you want to build a Libtool 
+library (with both the shared and static components where possible). If you 
+omit the `-rpath' switch, libtool will build a convenience library instead,
+see \ref{US_Creating_Convenience_Libraries} Creating convenience Libraries
+(page \pageref{US_Creating_Convenience_Libraries}). The `-rpath' switch is 
+doubly important, because it tells libtool that you intend to 
+install `libhello.la' in `/usr/local/lib'. This allows libtool to finalize the 
+library correctly after installation on the architectures that need it,
+see \ref{S_Installing_a_Library} Installing a Library
+(page \pageref{S_Installing_a_Library}).
+
+
+Finally, notice that only the Libtool library, `libhello.la', is visible after a successful link. The various files which form the local implementation details of the Libtool library are in a hidden subdirectory, but in order for the abstraction to work cleanly you shouldn't need to worry about these too much. 
+
+\subsection{Creating Static Libraries}\label{SB_Creating_Static_Libraries}
+
+
+In contrast, libtool will create a static library if either the `-static' or `-all-static' switches are specified on the link line for a Libtool library: 
+
+
+\begin{Verbatim}
+$ libtool gcc -static -o libhello.la hello.lo
+rm -fr .libs/libhello.la .libs/libhello.* .libs/libhello.*
+ar cru .libs/libhello.a  hello.o
+ranlib .libs/libhello.a
+creating libhello.la
+(cd .libs && rm -f libhello.la && ln -s ../libhello.la libhello.la)
+\end{Verbatim}
+
+
+Note that since libtool will only create a static archive, the `-rpath' switch 
+is not required: once a static library has been installed, there is no need to 
+perform additional finalization for the library to be used from the installed 
+location\footnote{As is often the case, AIX is peculiar ({\MeQ\cH74}\z{\MfQ\cH37}\z{\MbQ\cH237}) in this 
+respect -- ranlib adds path information to a static archive,
+and must be run again after 
+the archive is installed. libtool knows about this, and will automatically 
+bless the installed library again on AIX.}, or to track runtime search paths 
+when installing a static archive. 
+
+
+When you link an executable against this `libhello.la', the objects from 
+the static archive will be statically linked into the executable. The 
+advantage of such a library over the traditional native static archive is 
+that all of the dependency information from the Libtool library is used.
+For an example, See section \ref{US_Creating_Convenience_Libraries}
+Creating Convenience Libraries
+(page \pageref{US_Creating_Convenience_Libraries}). 
+
+
+\begin{quote}
+libtool is useful as a general library building toolkit, yet people still 
+seem to regress to the old way of building libraries whenever they want to 
+use static archives. You should exploit ({\MaQ\cH130}\z{\MbQ\cH224}) the consistent ({\MaQ\cH135}\z{\MbQ\cH40}\z{\McQ\cH248}\z{\MbQ\cH95}\z{\MbQ\cH237})
+interface of libtool even for static archives. If you don't want to use shared 
+archives, use the `-static' switch to build a static Libtool library. 
+\end{quote}
+
+\subsection{Creating Convenience Libraries}\label{US_Creating_Convenience_Libraries}
+
+The third type of library which can be built with libtool is the convenience library. Modern compilers are able to create partially linked objects:
+intermediate compilation units which comprise ({\MdQ\cH168}\z{\MdQ\cH214}) several compiled objects,
+but are neither an executable or a library. Such partially linked objects must 
+be subsequently ({\MaQ\cH119}\z{\MbQ\cH40}, {\McQ\cH211}\z{\MbQ\cH40}, {\MbQ\cH81}\z{\McQ\cH79}) linked into a library or executable to be 
+useful. Libtool convenience libraries are partially linked objects, but are 
+emulated by libtool on platforms with no native implementation. 
+
+\begin{quote}
+If you want to try this to see what libtool does on your machine, put the 
+following code in a file `trim.c', in the same directory as `hello.c' and 
+`libhello.la', and run the example shell commands from there: 
+\end{quote}
+
+\begin{Verbatim}
+#include <string.h>
+
+#define WHITESPACE_STR  " \f\n\r\t\v"
+
+/**
+ * Remove whitespace characters from both ends of a copy of
+ *  '\0' terminated STRING and return the result.
+ **/
+char * trim (char *string)
+{
+  char *result = 0;
+
+  /* Ignore NULL pointers.  */
+  if (string)
+    {
+      char *ptr = string;
+
+      /* Skip leading whitespace.  */
+      while (strchr (WHITESPACE_STR, *ptr))
+        ++ptr;
+
+      /* Make a copy of the remainder.  */
+      result = strdup (ptr);
+
+      /* Move to the last character of the copy.  */
+      for (ptr = result; *ptr; ++ptr)
+        /* NOWORK */;
+      --ptr;
+
+      /* Remove trailing whitespace.  */
+      for (--ptr; strchr (WHITESPACE_STR, *ptr); --ptr)
+          *ptr = '\0';
+   }
+
+  return result;
+}
+
+\end{Verbatim}
+
+To compile the convenience library with libtool, you would do this: 
+
+\begin{Verbatim}
+$ libtool gcc -c trim.c
+rm -f .libs/trim.lo
+gcc -c  -fPIC -DPIC trim.c -o .libs/trim.lo
+gcc -c trim.c -o trim.o >/dev/null 2>&1
+mv -f .libs/trim.lo trim.lo
+$ libtool gcc -o libtrim.la trim.lo
+rm -fr .libs/libtrim.la .libs/libtrim.* .libs/libtrim.*
+ar cru .libs/libtrim.al trim.lo
+ranlib .libs/libtrim.al
+creating libtrim.la
+(cd .libs && rm -f libtrim.la && ln -s ../libtrim.la libtrim.la)
+\end{Verbatim}
+
+Additionally, you can use a convenience library as an alias for a set of zero 
+or more object files and some dependent libraries. If you need to link several 
+objects against a long list of libraries, it is much more convenient to create 
+an alias:
+
+\begin{Verbatim}
+$ libtool gcc -o libgraphics.la -lpng -ltiff -ljpeg -lz
+rm -fr .libs/libgraphics.la .libs/libgraphics.* .libs/libgraphics.*
+ar cru .libs/libgraphics.al
+ranlib .libs/libgraphics.al
+creating libgraphics.la
+(cd .libs && rm -f libgraphics.la && \
+ln -s ../libgraphics.la libgraphics.la)
+\end{Verbatim}
+
+Having done this, whenever you link against `libgraphics.la' with libtool, all 
+of the dependent libraries will be linked too. In this case, there are no 
+actual objects compiled into the convenience library, but you can do that too,
+if need be. 
+
+\section{Linking an Executable}\label{S_Linking_an_Executable}
+
+Continuing the parallel between the syntax used to compile with libtool and the syntax used when building old static libraries, linking an executable is a matter of combining compilation units into a binary in both cases. We tell the compiler which objects and libraries are required, and it creates an executable for us. 
+
+\begin{quote}
+If you want to try this to see what libtool does on your machine, put the following code in a file `main.c', in the same directory as `hello.c' and `libhello.la', and run the example shell commands from there: 
+\end{quote}
+
+
+ 
+\begin{Verbatim}
+void hello ();
+
+int main (int argc, char *argv[])
+{
+  hello ("World");
+  exit (0);
+}
+\end{Verbatim}
+
+To compile an executable which uses the non-Libtool `libhello.a' library 
+built previously (see section \ref{S_Ther_Libtool_Library} The Libtool Library,
+page \pageref{S_Ther_Libtool_Library}), I would use the following commands: 
+
+
+
+ 
+
+\begin{Verbatim}[frame=single]
+$ gcc -o hello main.c libhello.a
+$ ./hello
+Hello, World!
+\end{Verbatim}
+
+
+
+To create a similar executable on the HP-UX host, using libtool this time: 
+
+
+
+\begin{Verbatim}
+$ libtool gcc -o hello main.c libhello.la
+libtool: link: warning: this platform does not like uninstalled
+libtool: link: warning: shared libraries.
+libtool: link: hello will be relinked during installation
+gcc -o .libs/hello main.c /tmp/hello/.libs/libhello.sl  \
+-Wl,+b -Wl,/tmp/hello/.libs:/usr/local/lib
+creating hello
+$ ls
+hello     hello.lo   libhello.la
+hello.c   hello.o    main.c
+$ ./hello
+Hello, World!
+\end{Verbatim}
+
+Notice that you linked against the Libtool library, `libhello.la', but otherwise the link command you used was not really very different from non-Libtool static library link command used earlier. Still, libtool does several things for you: it links with the shared archive rather than the static archive; and it sets the compiler options so that the program can be run \underline{in place} ({\MjQ\cH95}\z{\MbQ\cH231}\z{\MbQ\cH237}), even though it is linked against the uninstalled Libtool library. Using a make rule without the benefit of libtool, it would be almost impossible to reliably link a program against an uninstalled shared library in this way, since the particular switches needed would be different between the various platforms you want the project to work with. Also without the extra compiler options libtool adds for you, the program will search only the standard library direcotories for a shared `libhello'. 
+
+
+The link warning tells you that libtool knows that on HP-UX the program will 
+stop working if it is copied directly to the installation directory; To 
+prevent it breaking, libtool will relink the program when it is installed,
+see \ref{S_Linking a Library} Installing a Library
+(page \pageref{S_Linking a Library}). 
+
+
+I discussed the creation of static Libtool libraries 
+in \ref{SB_Creating_Static_Libraries} Creating Static Libraries (page
+\pageref{SB_Creating_Static_Libraries}). If you link an executable against such a library, the library objects, by definition, can only be statically linked into your executable. Often this is what you want if the library is not intended for installation, or if you have temporarily disabled building of shared libraries in your development tree to speed up compilation while you are debugging. 
+
+
+Sometimes, this isn't what you want. You might need to install a complete Libtool library with shared and static components, but need to generate a static executable linked against the same library, like this: 
+
+\begin{Verbatim}
+$ libtool gcc -static -o hello main.c libhello.la
+gcc -o hello main.c ./.libs/libhello.a
+\end{Verbatim}
+
+In this case, the `-static' switch instructs libtool to choose the static component of any uninstalled Libtool library. 
+
+
+You could have specified `-all-static' instead, which instructs libtool to link the executable with only static libraries (wherever possible), for any Libtool or native libraries used. 
+
+
+Finally, you can also link executables against convenience libraries. This 
+makes sense when the convenience library is being used as an alias (see section
+\ref {US_Creating_Convenience_Libraries} Creating Convenience Libraries, page 
+\pageref{US_Creating_Convenience_Libraries}). Notice how `libgraphics.la' 
+expands to its own dependencies in the link command:
+
+\begin{Verbatim}
+$ libtool gcc -o image loader.o libgraphics.la
+libtool: link: warning: this platform does not like uninstalled
+libtool: link: warning: shared libraries
+libtool: link: image will be relinked during installation
+gcc -o .libs/image loader.o -lpng -ltiff -ljpeg -lz \
+-Wl,+b -Wl,/tmp/image/.libs:/usr/local/lib
+creating image
+\end{Verbatim}
+
+ You can also link against convenience libraries being used as partially linked objects, so long as you are careful that each is linked only once. Remember that a partially linked object is just the same as any other object, and that if you load it twice (even from different libraries), you will get multiple definition errors when you try to link your executable. This is almost the same as using the `-static' switch on the libtool link line to link an executable with the static component of a normal Libtool library, except that the convenience library comprises PIC objects. When statically linking an executable, PIC objects are best avoided however, see \ref{SS_Position_Independent_Code} Position Independent 
+ Code (page \pageref{SS_Position_Independent_Code}). 
+
+\section{Linking a Library}\label{S_Linking a Library}
+Libraries often rely on code in other libraries. Traditionally the way to deal with this is to know what the dependencies are and, when linking an executable, be careful to list all of the dependencies on the link line in the correct order. If you have ever built an X Window application using a widget library, you will already be familiar with this notion. 
+
+
+Even though you only use the functions in the widget library directly, a typical link command would need to be: 
+
+\begin{Verbatim}
+$ gcc -o Xtest -I/usr/X11R6/include Xtest.c -L/usr/X11R6/lib \
+-lXm -lXp -lXaw -lXmu -lX11 -lnsl -lsocket
+\end{Verbatim}
+
+With modern architectures, this problem has been solved by allowing libraries to be linked into other libraries, but this feature is not yet particularly portable. If you are trying to write a portable project, it is not safe to rely on native support for inter-library dependencies, especially if you want to have dependencies between static and shared archives. Some of the features discussed in this section were not fully implemented before Libtool 1.4, so you should make sure that you are using this version or newer if you need these features. 
+
+If you want to try the examples in this section to see what libtool does on your machine, you will first need to modify the source of `hello.c' to introduce a dependency on `trim.c': 
+
+
+\begin{Verbatim}
+#include <stdio.h>
+
+extern char *trim ();
+extern void free ();
+
+void hello (char *who)
+{
+  char *trimmed = trim (who);
+  printf ("Hello, %s!\n", trimmed);
+  free (trimmed);
+}
+\end{Verbatim}
+
+ You might also want to modify the `main.c' file to exercise the new `trim' functionality to prove that the newly linked executable is working: 
+
+\begin{Verbatim}
+void hello ();
+
+int main (int argc, char *argv[])
+{
+  hello ("\tWorld \r\n");
+  exit (0);
+}
+\end{Verbatim}
+
+ Suppose I want to make two libraries, `libtrim' and `libhello'. `libhello' uses the `trim' function in `libtrim' but the code in `main' uses only the `hello' function in `libhello'. Traditionally, the two libraries are built like this: 
+
+\begin{Verbatim}
+$ rm hello *.a *.la *.o *.lo
+$ gcc -c trim.c
+$ ls
+hello.c   main.c   trim.c   trim.o
+$ ar cru libtrim.a trim.o
+$ ranlib libtrim.a
+$ gcc -c hello.c
+$ ls
+hello.c   hello.o   libtrim.a   main.c   trim.c   trim.o
+$ ar cru libhello.a hello.o
+$ ranlib libhello.a
+$ ls
+hello.c   libhello.a   main.c   trim.o
+hello.o   libtrim.a    trim.c
+\end{Verbatim}
+
+ Notice that there is no way to specify that `libhello.a' won't work unless it is also linked with `libtrim.a'. Because of this I need to list both libraries when I link the application. \underline{What's more} ({\McQ\cH55}\z{\MaQ\cH47}), I need to list them in the correct order: 
+
+\begin{Verbatim}
+$ gcc -o hello main.c libtrim.a libhello.a
+/usr/bin/ld: Unsatisfied symbols:
+   trim (code)
+collect2: ld returned 1 exit status
+$ gcc -o hello main.c libhello.a libtrim.a
+$ ls
+hello     hello.o      libtrim.a   trim.c
+hello.c   libhello.a   main.c      trim.o
+$ ./hello
+Hello, World!
+\end{Verbatim}
+
+\subsection{Inter-library Dependencies}\label{SS_Inter-library_Dependencies}
+
+libtool's inter-library dependency support will use the native implementation if there is one available. If there is no native implementation, or if the native implementation is broken or incomplete, libtool will use an implementation of its own. 
+
+
+To build `libtrim' as a standard Libtool library (see
+section \ref{S_Ther_Libtool_Library} The Libtool Library, page
+\pageref{S_Ther_Libtool_Library}), as follows: 
+
+\begin{Verbatim}
+$ rm hello *.a *.o
+$ ls
+hello.c   main.c   trim.c
+$ libtool gcc -c trim.c
+rm -f .libs/trim.lo
+gcc -c  -fPIC -DPIC trim.c -o .libs/trim.lo
+gcc -c trim.c -o trim.o >/dev/null 2>&1
+mv -f .libs/trim.lo trim.lo
+$ libtool gcc -rpath /usr/local/lib -o libtrim.la trim.lo
+rm -fr .libs/libtrim.la .libs/libtrim.* .libs/libtrim.*
+/opt/gcc-lib/hp821/2.7.0/ld -b +h libtrim.sl.0 +b /usr/local/lib \
+-o .libs/libtrim.sl.0.0  trim.lo
+(cd .libs && rm -f libtrim.sl.0 && ln -s libtrim.sl.0.0 libtrim.sl.0)
+(cd .libs && rm -f libtrim.sl && ln -s libtrim.sl.0.0 libtrim.sl)
+ar cru .libs/libtrim.a  trim.o
+ranlib .libs/libtrim.a
+creating libtrim.la
+(cd .libs && rm -f libtrim.la && ln -s ../libtrim.la libtrim.la)
+\end{Verbatim}
+
+When you build `libhello', you can specify the libraries it depends on at the command line, like so: 
+
+\begin{Verbatim}
+$ libtool gcc -c hello.c
+rm -f .libs/hello.lo
+gcc -c  -fPIC -DPIC hello.c -o .libs/hello.lo
+gcc -c hello.c -o hello.o >/dev/null 2>&1
+mv -f .libs/hello.lo hello.lo
+$ libtool gcc -rpath /usr/local/lib -o libhello.la hello.lo libtrim.la
+rm -fr .libs/libhello.la .libs/libhello.* .libs/libhello.*
+
+*** Warning: inter-library dependencies are not known to be supported.
+*** All declared inter-library dependencies are being dropped.
+*** The inter-library dependencies that have been dropped here will be
+*** automatically added whenever a program is linked with this library
+*** or is declared to -dlopen it.
+/opt/gcc-lib/hp821/2.7.0/ld -b +h libhello.sl.0 +b /usr/local/lib \
+-o .libs/libhello.sl.0.0  hello.lo
+(cd .libs && rm -f libhello.sl.0 && ln -s libhello.sl.0.0 libhello.sl.0)
+(cd .libs && rm -f libhello.sl && ln -s libhello.sl.0.0 libhello.sl)
+ar cru .libs/libhello.a  hello.o
+ranlib .libs/libhello.a
+creating libhello.la
+(cd .libs && rm -f libhello.la && ln -s ../libhello.la libhello.la)
+$ ls
+hello.c    hello.o       libtrim.la   trim.c   trim.o
+hello.lo   libhello.la   main.c       trim.lo
+\end{Verbatim}
+
+Although, on HP-UX, libtool warns that it doesn't know how to use the native inter-library dependency implementation, it will track the dependencies and make sure they are added to the final link line, so that you only need to specify the libraries that you use directly. 
+
+
+Now, you can rebuild `hello' exactly as in the earlier example (see 
+section \ref{S_Linking_an_Executable}, page \pageref{S_Linking_an_Executable}
+Linking an Executable), as in: 
+
+\begin{Verbatim}
+$ libtool gcc -o hello main.c libhello.la
+libtool: link: warning: this platform does not like uninstalled
+libtool: link: warning: shared libraries
+libtool: link: hello will be relinked during installation
+gcc -o .libs/hello main.c /tmp/intro-hello/.libs/libhello.sl \
+/tmp/intro-hello/.libs/libtrim.sl \
+-Wl,+b -Wl,/tmp/intro-hello/.libs:/usr/local/lib
+creating hello
+$ ./hello
+Hello, World!
+\end{Verbatim}
+
+Notice that even though you only specified the `libhello.la' library at the command line, libtool remembers that `libhello.sl' depends on `libtrim.sl' and links that library too. 
+
+
+You can also link a static executable, and the dependencies are handled 
+similarly: 
+
+\begin{Verbatim}
+$ libtool gcc -o hello-again -static main.c libhello.la
+gcc -o hello main.c ./.libs/libhello.a /tmp/intro-hello/.libs/libtrim.a
+$ ./hello-again
+Hello, World!
+\end{Verbatim}
+
+For your own projects, provided that you use libtool, and that you specify the libraries you wish to link using the `.la' pseudo-libraries, these dependencies can be nested as deeply as you like. You can also register dependencies on native libraries, though you will of course need to specify any dependencies that the native library itself has at the same time.
+
+\subsection{Using Convenience Libraries}
+
+To rebuild `libtrim' as a convenience library (see section \ref{US_Creating_Convenience_Libraries} Creating Convenience Libraries, page \pageref{US_Creating_Convenience_Libraries}), use the following commands: 
+
+\begin{Verbatim}
+$ rm hello *.la
+$ ls
+hello.c   hello.lo   hello.o   main.c   trim.c   trim.lo   trim.o
+$ libtool gcc -o libtrim.la trim.lo
+rm -fr .libs/libtrim.la .libs/libtrim.* .libs/libtrim.*
+ar cru .libs/libtrim.al trim.lo
+ranlib .libs/libtrim.al
+creating libtrim.la
+(cd .libs && rm -f libtrim.la && ln -s ../libtrim.la libtrim.la)
+\end{Verbatim}
+
+Then, rebuild `libhello', with an inter-library dependency on `libtrim' (see section \ref{SS_Inter-library_Dependencies} Inter-library Dependencies, page
+\pageref{SS_Inter-library_Dependencies}), like this:
+
+\begin{Verbatim}
+$ libtool gcc -rpath `pwd`/_inst -o libhello.la hello.lo libtrim.la
+rm -fr .libs/libhello.la .libs/libhello.* .libs/libhello.*
+
+*** Warning: inter-library dependencies are not known to be supported.
+*** All declared inter-library dependencies are being dropped.
+*** The inter-library dependencies that have been dropped here will be
+*** automatically added whenever a program is linked with this library
+*** or is declared to -dlopen it.
+rm -fr .libs/libhello.lax
+mkdir .libs/libhello.lax
+rm -fr .libs/libhello.lax/libtrim.al
+mkdir .libs/libhello.lax/libtrim.al
+(cd .libs/libhello.lax/libtrim.al && ar x /tmp/./.libs/libtrim.al)
+/opt/gcc-lib/hp821/2.7.0/ld -b +h libhello.sl.0 +b /tmp/hello/_inst \
+-o .libs/libhello.sl.0.0  hello.lo .libs/libhello.lax/libtrim.al/trim.lo
+(cd .libs && rm -f libhello.sl.0 && ln -s libhello.sl.0.0 libhello.sl.0)
+(cd .libs && rm -f libhello.sl && ln -s libhello.sl.0.0 libhello.sl)
+rm -fr .libs/libhello.lax
+mkdir .libs/libhello.lax
+rm -fr .libs/libhello.lax/libtrim.al
+mkdir .libs/libhello.lax/libtrim.al
+(cd .libs/libhello.lax/libtrim.al && ar x /tmp/hello/./.libs/libtrim.al)
+ar cru .libs/libhello.a  hello.o  .libs/libhello.lax/libtrim.al/trim.lo
+ranlib .libs/libhello.a
+rm -fr .libs/libhello.lax .libs/libhello.lax
+creating libhello.la
+(cd .libs && rm -f libhello.la && ln -s ../libhello.la libhello.la)
+$ ls
+hello.c    hello.o       libtrim.la   trim.c    trim.o
+hello.lo   libhello.la   main.c       trim.lo
+\end{Verbatim}
+
+Compare this to the previous example of building `libhello' and you can see that things are rather different. On HP-UX, partial linking is not known to work, so libtool extracts the objects from the convenience library, and links them directly into `libhello'. That is, `libhello' is comprised of its own objects and the objects in `libtrim'. If `libtrim' had had any dependencies, `libhello' would have inherited them too. This technique is especially useful for grouping source files into subdirectories, even though all of the objects compiled in the subdirectories must eventually reside in a big library: compile the sources in each into a convenience library, and in turn link all of these into a single library which will then contain all of the constituent objects and dependencies of the various convenience libraries. 
+
+
+When you relink the hello executable, notice that `libtrim' is not linked, because the `libtrim' objects are already present in `libhello': 
+
+\begin{Verbatim}
+$ libtool gcc -o hello main.c libhello.la
+libtool: link: warning: this platform does not like uninstalled
+libtool: link: warning: shared libraries
+libtool: link: hello will be relinked during installation
+gcc -o .libs/hello main.c /tmp/intro-hello/.libs/libhello.sl \
+-Wl,+b -Wl,/tmp/intro-hello/.libs:/usr/local/lib
+creating hello
+$ ./hello
+Hello, World!
+\end{Verbatim}
+
+\section{Executing Uninstalled Binaries}\label{S_Executing_Uninstalled_Binaries}
+If you look at the contents of the hello program you built in the last section, you will see that it is not actually a binary at all, but a shell script which sets up the environment so that when the real binary is called it finds its the shared libraries in the correct locations. Without this script, the runtime loader might not be able to find the uninstalled libraries. Or worse, it might find an old version and load that by mistake! 
+
+
+In practice, this is all part of the unified ({\MbQ\cH65}\z{\McQ\cH248}\z{\McQ\cH241}, {\McQ\cH36}\z{\McQ\cH248}) interface libtool 
+presents so you needn't worry about it most of the time. The exception is when you need to look at the binary with another program, to debug it for example: 
+
+\begin{Verbatim}
+$ ls
+hello     hello.lo   libhello.la   main.c   trim.lo
+hello.c   hello.o    libtrim.la    trim.c   trim.o
+$ libtool gdb hello
+GDB is free software and you are welcome to distribute copies of it
+under certain conditions; type "show copying" to see the conditions.
+There is absolutely no warranty for GDB; type "show warranty" for
+details.
+GDB 4.18 (hppa1.0-hp-hpux10.20),
+Copyright 1999 Free Software Foundation, Inc...
+(gdb) bre main
+Breakpoint 1 at 0x5178: file main.c, line 6.
+(gdb) run
+Starting program: /tmp/intro-hello/.libs/hello
+Breakpoint 1, main (argc=1, argv=0x7b03aa70) at main.c:6
+6           return hello("World");
+...
+\end{Verbatim}
+
+\section{Installing a Library}\label{S_Installing_a_Library}
+Now that the library and an executable which links with it have been successfully built, they can be installed. For the sake of this example I will cp the objects to their destination, though libtool would be just as happy if I were to use install with the long, requisite list of parameters. 
+
+
+It is important to install the library to the `-rpath' destination which was 
+specified when it was linked earlier, or at least that it be visible from 
+that location when the runtime loader searches for it. This rule is not 
+enforced by libtool, since it is often desirable to install libraries to a 
+staging\footnote{When making a binary package from a virtual root directory 
+for example. } area. Of course, the package must ultimately ({\MbQ\cH124}\z{\MbQ\cH40}; {\McQ\cH31}\z{\MbQ\cH148}\z{\MaQ\cH203})
+install the library to the specified `-rpath' destination for it to work 
+correctly, like this: 
+
+\begin{Verbatim}
+$ libtool cp libtrim.la /usr/local/lib
+cp .libs/libtrim.sl.0.0 /usr/local/lib/libtrim.sl.0.0
+(cd /usr/local/lib && rm -f libtrim.sl.0 && \
+ln -s libtrim.sl.0.0 libtrim.sl.0)
+(cd /usr/local/lib && rm -f libtrim.sl && \
+ln -s libtrim.sl.0.0 libtrim.sl)
+chmod 555 /usr/local/lib/libtrim.sl.0.0
+cp .libs/libtrim.lai /usr/local/lib/libtrim.la
+cp .libs/libtrim.a /usr/local/lib/libtrim.a
+ranlib /usr/local/lib/libtrim.a
+chmod 644 /usr/local/lib/libtrim.a
+----------------------------------------------------------------------
+Libraries have been installed in:
+   /usr/local/lib
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use -LLIBDIR
+flag during linking and do at least one of the following:
+   - add LIBDIR to the SHLIB_PATH environment variable
+     during execution
+   - use the -Wl,+b -Wl,LIBDIR linker flag
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+\end{Verbatim}
+
+Again, libtool takes care of the details for you. Both the static and shared archives are copied into the installation directory and their access modes are set appropriately. libtool blesses the static archive again with ranlib, which would be easy to forget without the benefit of libtool, especially if I develop on a host where the library will continue to work without this step. Also, libtool creates the necessary links for the shared archive to conform ({\MjQ\cH99}\z{\MbQ\cH206}) with HP-UXs library versioning rules. Compare this to what you see with the equivalent commands running on GNU/Linux to see how libtool applies these rules according to the requirements of its host. The block of text libtool shows at the end of the installation serves to explain how to link executables against the newly installed library on HP-UX and how to make sure that the executables linked against it will work. Of course, the best way to ensure this is to use libtool to perform the linking. I'll leave the details of linking against an installed Libtool library as an exercise - everything you need to know can be extrapolated ({\MbQ\cH82}\z{\MbQ\cH105}) from the example of linking against an uninstalled Libtool library, See section \ref{S_Linking_an_Executable} Linking an Executable, page \pageref{S_Linking_an_Executable}. 
+
+
+On some architectures, even shared archives need to be blessed on installation. For example, GNU/Linux requires that ldconfig be run when a new library is installed. Typically, a library will be installed to its target destination after being built, in which case libtool will perform any necessary blessing during installation. Sometimes, when building a binary package for installation on another machine, for example, it is not desirable to perform the blessing on the build machine. No problem, libtool takes care of this too! libtool will detect if you install the library to a destination other than the one specified in the `-rpath' argument passed during the archive link, and will simply remind you what needs to be done before the library can be used: 
+
+\begin{Verbatim}
+$ mkdir -p /usr/local/stow/hello-1.0/lib
+$ libtool cp libtrim.la /usr/local/stow/hello-1.0/lib
+cp .libs/libtrim.sl.0.0 /usr/local/stow/hello-1.0/lib/libtrim.sl.0.0
+(cd /usr/local/stow/hello-1.0/lib && rm -f libtrim.sl.0 && \
+ln -s libtrim.sl.0.0 libtrim.sl.0)
+(cd /usr/local/stow/hello-1.0/lib && rm -f libtrim.sl && \
+ln -s libtrim.sl.0.0 libtrim.sl)
+chmod 555 /usr/local/stow/hello-1.0/lib/libtrim.sl.0.0
+cp .libs/libtrim.lai /usr/local/stow/hello-1.0/lib/libtrim.la
+cp .libs/libtrim.a /usr/local/stow/hello-1.0/lib/libtrim.a
+ranlib /usr/local/stow/hello-1.0/lib/libtrim.a
+chmod 644 /usr/local/stow/hello-1.0/lib/libtrim.a
+libtool: install: warning: remember to run
+libtool: install: warning: libtool --finish /usr/local/lib
+\end{Verbatim}
+
+If you will make the installed libraries visible in the destination directory 
+with symbolic links, you need to do whatever it is you do to make the library 
+visible, and then bless the library in that location with the libtool --
+finish /usr/local/lib command: 
+
+\begin{Verbatim}[frame=single]
+$ cd /usr/local/stow
+$ stow hello-1.0
+$ libtool --finish /usr/local/lib
+\end{Verbatim}
+
+If you are following the examples \underline{so far} ({\MaQ\cH131}\z{\MbQ\cH241}\z{\MaQ\cH135}\z{\MbQ\cH209}\z{\MbQ\cH162}),
+you will also need to install the Libtool library, `libhello.la',
+before you move on to the next section: 
+
+\begin{Verbatim}
+$ libtool cp libhello.la /usr/local/lib
+cp .libs/libhello.sl.0.0 /usr/local/lib/libhello.sl.0.0
+(cd /usr/local/lib && rm -f libhello.sl.0 && \
+ln -s libhello.sl.0.0 libhello.sl.0)
+(cd /usr/local/lib && rm -f libhello.sl && \
+ln -s libhello.sl.0.0 libhello.sl)
+chmod 555 /usr/local/lib/libhello.sl.0.0
+cp .libs/libhello.lai /usr/local/lib/libhello.la
+cp .libs/libhello.a /usr/local/lib/libhello.a
+ranlib /usr/local/lib/libhello.a
+chmod 644 /usr/local/lib/libhello.a
+----------------------------------------------------------------------
+Libraries have been installed in:
+   /usr/local/lib
+
+If you ever happen to want to link against installed libraries
+in a given directory, LIBDIR, you must either use libtool, and
+specify the full pathname of the library, or use -LLIBDIR
+flag during linking and do at least one of the following:
+   - add LIBDIR to the SHLIB_PATH environment variable
+     during execution
+   - use the -Wl,+b -Wl,LIBDIR linker flag
+
+See any operating system documentation about shared libraries for
+more information, such as the ld(1) and ld.so(8) manual pages.
+----------------------------------------------------------------------
+\end{Verbatim}
+
+ Once a Libtool library is installed, binaries which link against it will hardcode the path to the Libtool library, as specified with the `-rpath' switch when the library was built. libtool always encodes the installation directory into a Libtool library for just this purpose. Hardcoding directories in this way is a good thing, because binaries linked against such libraries will continue to work if there are several incompatible versions of the library visible to the runtime loader (say a Trojan `libhello' in a user's LD\_{}LIBRARY\_{}PATH, or a test build of the next release). The disadvantage to this system is that if you move libraries to new directories, executables linked in this way will be unable to find the libraries they need. Moving any library is a bad idea however, doubly so for a Libtool library which has its installation directory encoded internally, so the way to avoid problems of this nature is to not move libraries around after installation! 
+
+\section{Installing an Executable}
+
+Installing an executable uses exactly the same command line that I used to install the library earlier: 
+
+\begin{Verbatim}
+$ libtool cp hello /usr/local/bin
+gcc -o /tmp/libtool-28585/hello main.c /usr/local/lib/libhello.sl \
+/usr/local/lib/libtrim.sl -Wl,+b -Wl,/usr/local/lib
+cp /tmp/libtool-28585/hello /usr/local/bin/hello
+$ /usr/local/bin/hello
+Hello, World!
+\end{Verbatim}
+
+As libtool said earlier, during the initial linking of the hello program in the build directory, hello must be rebuilt before installation. This is a peculiarity of HP-UX (and a few other architectures) which you won't see if you are following the examples on a GNU/Linux system. In the shell trace above, libtool has built an installable version of the hello program, saving me the trouble of remembering (or worse -- coding for) the particulars of HP-UX, which runs correctly from the installed location. 
+
+
+As a matter of interest, if you look at the attributes of the installed program using HP-UX's chatr command:
+
+\begin{Verbatim}
+$ chatr /usr/local/bin/hello
+/usr/local/bin/hello: 
+         shared executable 
+         shared library dynamic path search:
+             SHLIB_PATH     disabled  second 
+             embedded path  enabled   first  /usr/local/lib
+         internal name:
+             /tmp/libtool-28585/hello
+         shared library list:
+             static    /usr/local/lib/libhello.sl.0
+             static    /usr/local/lib/libtrim.sl.0
+             dynamic   /lib/libc.1
+         shared library binding:
+             deferred 
+...
+\end{Verbatim}
+
+You can see that the runtime library search path for the installed hello program has been set to find the installed `libhello.sl.0' shared archive, preventing it from accidentally loading a different library (with the same name) from the default load path. This is a feature of libtool, and a very important one at that, and although it may not seem like the right way to do things initially, it saves a lot of trouble when you end up with several versions of a library installed in several locations, since each program will continue to use the version that it was linked with, subject to library versioning rules, see \ref{S_Library_Versioning} Library Versioning (page \pageref{S_Library_Versioning}). 
+
+Without the help of libtool, it is very difficult to prevent programs and 
+libraries in the build tree from loading earlier (compatible) versions of a 
+shared archive that were previously installed without an intimate ({\McQ\cH23}\z{\McQ\cH166}\z{\MbQ\cH237}) 
+knowledge of the build hosts architecture. Making it work portably would be 
+nigh ( ({\MbQ\cH81}) {\McQ\cH161}\z{\MbQ\cH107}) impossible! You should experiment ({\MaQ\cH245}\z{\McQ\cH240}) with changes to 
+the uninstalled library and satisfy yourself that the previously installed 
+program continues to load the installed library at runtime, whereas the 
+uninstalled program picks up the modifications in the uninstalled version 
+of the library. 
+
+This example introduces the concept of Libtool modes. Most of the time libtool 
+can infer ({\MmQ\cH147}\z{\MbQ\cH59}) a mode of operation from the contents of the command line,
+but sometimes (as in this example) it needs to be told.
+In \ref{S_Executing_Uninstalled_Binaries} Executing Uninstalled Binaries (page
+\pageref{S_Executing_Uninstalled_Binaries}) we already used libtool in execute 
+mode to run gdb against an uninstalled binary. In this example I am telling 
+libtool that I want to pass the hello binary to the chatr command, particularly since I know that the `hello' file is a script to set the local execution environment before running the real binary. 
+
+
+The various modes that libtool has are described in the Libtool reference documentation, and are listed in the Libtool help text: 
+
+\begin{verbatim}
+$ libtool --help
+...
+\end{verbatim}
+
+MODE must be one of the following:
+
+\begin{description}
+\item[clean]           remove files from the build directory
+\item[compile]         compile a source file into a libtool object
+\item[execute]         automatically set library path, then run a program
+\item[finish]          complete the installation of libtool libraries
+\item[install]         install libraries or executables
+\item[link]            create a library or an executable
+\item[uninstall]       remove libraries from an installed directory
+\end{description}
+
+MODE-ARGS vary depending on the MODE.  Try `libtool --help --mode=MODE'
+for a more detailed description of MODE.
+
+\section{Uninstalling}
+
+Having installed all of these files to `/usr/local', it might be difficult to remember which particular files belong to each installation. In the case of an executable, the uninstallation requires no magic, but when uninstalling a Libtool library all of the files which comprise the implementation of the Libtool library in question must be uninstalled: 
+
+
+\begin{verbatim}
+$ libtool rm -f /usr/local/bin/hello
+rm -f /usr/local/bin/hello
+$ libtool rm -f /usr/local/lib/libhello.la
+rm -f /usr/local/lib/libhello.la /usr/local/lib/libhello.sl.0.0 \
+/usr/local/lib/libhello.sl.0 /usr/local/lib/libhello.sl \
+/usr/local/lib/libhello.a
+$ libtool rm -f /usr/local/lib/libtrim.la
+rm -f /usr/local/lib/libtrim.la /usr/local/lib/libtrim.sl.0.0 \
+/usr/local/lib/libtrim.sl.0 /usr/local/lib/libtrim.sl \
+/usr/local/lib/libtrim.a
+\end{verbatim} 
+
+Using libtool to perform the uninstallation in this way ensures that all of the files that it installed, including any additional soft links required by the architecture versioning scheme for shared archives, are removed with a single command. 
+
+
+Having explored the use of libtool from the command line, the next chapter will discuss how to integrate libtool into the configury of your GNU Autotools based projects.
+

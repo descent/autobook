@@ -1,0 +1,362 @@
+\chapter{Writing Portable C with GNU Autotools}
+
+GNU Autotools permits you to write highly portable programs. However, using GNU Autotools is not by itself enough to make your programs portable. You must also write them portably.
+
+In this chapter we will give an introduction to writing portable programs in C. We will start with some notes on portable use of the C language itself. We will then discuss cross-Unix portability. We will finish with some notes on portability between Unix and Windows.
+
+Portability is a big topic, and we can not cover everything in this chapter. The basic rule of portable code is to remember that every system is in some ways unique. Do not assume that every other system is like yours. It is very helpful to be familiar with relevant standards, such as the ISO C standard and the POSIX.1 standard. Finally, there is no substitute for experience; if you have the opportunity to build and test your program on different systems, do so. 
+
+\section{C Language Portability}
+
+The C language makes it easy to write non-portable code. In this section we discuss these portability issues, and how to avoid them.
+
+We concentrate on differences that can arise on systems in common use today. For example, all common systems today define char to be 8 bits, and define a pointer to hold the address of an 8-bit byte. We do not discuss the more exotic possibilities found on historical machines or on certain supercomputers. If your program needs to run in unusual settings, make sure you understand the characteristics of those systems; the system documentation should include a C portability guide describing the problems you are likely to encounter. 
+
+\subsection{ISO C}
+
+The ISO C standard first appeared in 1989 (the standard is often called ANSI C). It added several new features to the C language, most notably function prototypes. This led to many years of portability issues when deciding whether to use ISO C features.
+
+We think that programs written today can assume the presence of an ISO C compiler. Therefore, we will not discuss issues related to the differences between ISO C compilers and older compilers--often called K\&R compilers, from the first book on C by Kernighan and Ritchie. You may see these differences handled in older programs.
+
+There is a newer C standard called `C9X'. Because compilers that support it are not widely available as of this writing, this discussion does not cover it. 
+
+\subsection{C Data Type Sizes}
+
+The C language defines data types in terms of a minimum size, rather than an exact size. As of this writing, this mainly matters for the types int and long. A variable of type int must be at least 16 bits, and is often 32 bits. A variable of type long must be at least 32 bits, and is sometimes 64 bits.
+
+The range of a 16 bit number is -32768 to 32767 for a signed number, or 0 to 65535 for an unsigned number. If a variable may hold numbers larger than 16 bits, use long rather than int. Never assume that int or long have a specific size, or that they will overflow at a particular point. When appropriate, use variables of system defined types rather than int or long: 
+
+\begin{description}
+\item [size\_{}t]
+\
+
+    Use this to hold the size of an object, as returned by sizeof. 
+\item[ptrdiff\_{}t]
+\
+
+    Use this to hold the difference between two pointers into the same array. 
+\item[time\_{}t]
+\
+
+    Use this to hold a time value as returned by the time function. 
+\item[off\_{}t]
+\
+
+    On a Unix system, use this to hold a file position as returned by lseek. 
+\item[ssize\_{}t]
+\
+
+    Use this to hold the result of the Unix read or write functions.
+\end{description}
+
+Some books on C recommend using typedefs to specify types of particular sizes, and then adjusting those typedefs on specific systems. GNU Autotools supports this using the `AC\_{}CHECK\_{}SIZEOF' macro. However, while we agree with using typedefs for clarity, we do not recommend using them purely for portability. It is safest to rely only on the minimum size assumptions made by the C language, rather than to assume that a type of a specific size will always be available. Also, most C compilers will define int to be the most efficient type for the system, so it is normally best to simply use int when possible.
+
+\subsection{C Endianness}
+
+When a number longer than a single byte is stored in memory, it must be stored in some particular format. Modern systems do this by storing the number byte by byte such that the bytes can simply be concatenated into the final number. However, the order of storage varies: some systems store the least significant byte at the lowest address in memory, while some store the most significant byte there. These are referred to as little-endian and big-endian systems, respectively.(32)
+
+This difference means that portable code may not make any assumptions about the order of storage of a number. For example, code like this will act differently on different systems:
+
+\begin{verbatim}
+  /* Example of non-portable code; don't do this */
+  int i = 4;
+  char c = *(char *) i;
+\end{verbatim}
+
+Although that was a contrived example, real problems arise when writing numeric data in a file or across a network connection. If the file or network connection may be read on a different type of system, numeric data must be written in a format which can be uambiguously recovered. It is not portable to simply do something like
+
+\begin{verbatim}
+ /* Example of non-portable code; don't do this */
+  write (fd, &i, sizeof i);
+\end{verbatim}
+
+This example is non-portable both because of endianness and because it assumes that the size of the type of i are the same on both systems.
+
+Instead, do something like this:
+
+\begin{verbatim}
+  int j;
+  char buf[4];
+  for (j = 0; j < 4; ++j)
+    buf[j] = (i >> (j * 8)) & 0xff;
+  write (fd, buf, 4); /* In real code, check the return value */
+\end{verbatim}
+
+This unambiguously writes out a little endian 4 byte value. The code will work on any system, and the result can be read unambiguously on any system.
+
+Another approach to handling endianness is to use the htons and ntohs functions available on most systems. These functions convert between network endianness and host endianness. Network endianness is big-endian; it has that name because the standard TCP/IP network protocols use big-endian ordering.
+
+These functions come in two sizes: htonl and ntohl operate on 4-byte quantities, and htons and ntohs operate on 2-byte quantities. The hton functions convert host endianness to network endianness. The ntoh functions convert network endianness to host endianness. On big-endian systems, these functions simply return their arguments; on little-endian systems, they return their arguments after swapping the bytes.
+
+Although these functions are used in a lot of existing code, they can be difficult to use in highly portable code, because they require knowing the exact size of your data types. If you know that the type int is exactly 4 bytes long, then it is possible to write code like the following:
+
+\begin{verbatim}
+  int j;
+  j = htonl (i);
+  write (fd, &j, 4);
+\end{verbatim}
+
+However, if int is not exactly 4 bytes long, this example will not work correctly on all systems.
+
+\subsection{C Structure Layout}
+
+C compilers on different systems lay out structures differently. In some cases there can even be layout differences between different C compilers on the same system. Compilers add gaps between fields, and these gaps have different sizes and are at different locations. You can normally assume that there are no gaps between fields of type char or array of char. However, you can not make any assumptions about gaps between fields of any larger type. You also can not make any assumptions about the layout of bitfield types.
+
+These structure layout issues mean that it is difficult to portably use a C struct to define the format of data which may be read on another type of system, such as data in a file or sent over a network connection. Portable code must read and write such data field by field, rather than trying to read an entire struct at once.
+
+Here is an example of non-portable code when reading data which may have been written to a file or a network connection on another type of system. Don't do this.
+
+\begin{verbatim}
+  /* Example of non-portable code; don't do this */
+  struct {
+    short i;
+    int j;
+  } s;
+  read (fd, &s, sizeof s);
+\end{verbatim}
+
+Instead, do something like this (the struct s is assumed to be the same as above):
+ 	
+
+\begin{verbatim}
+  unsigned char buf[6];
+  read (fd, buf, sizeof buf); /* Should check return value */
+  s.i = buf[0] | (buf[1] << 8);
+  s.j = buf[2] | (buf[3] << 8) | (buf[4] << 16) | (buf[5] << 24);
+\end{verbatim}
+
+Naturally the code to write out the structure should be similar.
+
+\subsection{C Floating Point}
+
+Most modern systems handle floating point following the IEEE-695 standard. However, there are still portability issues.
+
+Most processors use 64 bits of precision when computing floating point values. However, the widely used Intel x86 series of processors compute temporary values using 80 bits of precision, as do most instances of the Motorola 68k series. Some other processors, such as the PowerPC, provide fused multiply-add instructions which perform a multiplication and an addition using high precision for the intermediate value. Optimizing compilers will generate such instructions based on sequences of C operations.
+
+For almost all programs, these differences do not matter. However, for programs which do intensive floating point operations, the differences can be significant. It is possible to write floating point loops which terminate on one sort of processor but not on another.
+
+Unfortunately, there is no rule of thumb that can be used to avoid these problems. Most compilers provide an option to disable the use of extended precision (for GNU cc, the option is `-ffloat-store'). However, on the one hand, this merely shifts the portability problem elsewhere, and, on the other, the extended precision is often good rather than bad. Although these portability problems can not be easily avoided, you should at least be aware of them if you write programs which require very precise floating point operations.
+
+The IEEE-695 standard specifies certain flags which the floating point processor should make available (e.g., overflow, underflow, inexact), and specifies that there should be some control over the floating point rounding mode. Most processors make these flags and controls available; however, there is no portable way to access them. A portable program should not assume that it will have this degree of control over floating point operations. 
+
+\subsection{GNU cc Extensions}
+
+The GNU cc compiler has several useful extensions, which are documented in the GNU cc manual. A program which must be portable to other C compilers must naturally avoid these extensions; the `-pedantic' option may be used to warn about any accidental use of an extension.
+
+However, the GNU cc compiler is itself highly portable, and it runs on all modern Unix platforms as well as on Windows. Depending upon your portability requirements, you may be able to simply assume that GNU cc is available, in which case your program may use extensions when they are useful. Note that some extensions are inherently non-portable, such as inline assembler code, or using attributes to specify a particular section for a function or a global variable. 
+
+\section{Cross-Unix Portability}
+
+In the previous section, we discussed issues related to the C language. Here we will discuss the portability of C programs across different Unix implementations. All modern Unix systems conform to the POSIX.1 (1990 edition) and POSIX.2 (1992 edition) standards. They also all support the sockets interface for networking code. However, there are still significant differences between systems which can affect portability.
+
+We will not discuss portability to older Unix systems which do not conform to the POSIX standards. If you need this sort of portability, you can often find some valuable hints in the set of macros defined by autoconf, and in the `configure.in' files of older programs which use autoconf. 
+
+\subsection{Cross-Unix Function Calls}
+
+Functions not mentioned in POSIX.1 may not be available on all systems. If you want to use one of these functions, you should normally check for its presence by using `AC\_{}CHECK\_{}FUNCS' in your `configure.in' script, and adapt to its absence if possible. Here is a list of some popular functions which are available on many, but not all, modern Unix systems:
+
+\begin{description}
+\item[alloca]
+\
+
+    There are several portability issues with alloca. See the description of AC\_{}FUNC\_{}ALLOCA in the autoconf manual. Although this function can be very convenient, it is normally best to avoid it in highly portable code. 
+\item[dlopen]
+\
+
+GNU libtool provides a portable alternate interface to dlopen.
+See chapter 17. Dynamic Loading. 
+\item[getline]
+\
+
+    In some cases fgets may be used as a fallback. In others, you will need to provide your own version of this function. 
+\item[getpagesize]
+\
+
+    On some systems, the page size is available as the macro PAGE\_{}SIZE in the header file `sys/param.h'. On others, the page size is available via the sysconf function. If none of those work, you must generally simply guess a value such as 4096. 
+\item[gettimeofday]
+\
+
+    When this is not available, fall back to a less precise function such as time or ftime (which itself is not available on all systems). 
+\item[mmap]
+\
+
+    In some cases you can use either mmap or ordinary file I/O. In others, a program which uses mmap will simply not be portable to all Unix systems. Note that mmap is an optional part of the 1996 version of POSIX.1, so it is likely to be added to all Unix systems over time. 
+\item[ptrace]
+\
+
+    Unix systems without ptrace generally provide some other mechanism for debugging subprocesses, such as `/proc'. However, there is no widely portable method for controlling subprocesses, as evidenced by the source code to the GNU debugger, gdb. 
+\item[setuid]
+\
+
+    Different Unix systems handle this differently. On some systems, any program can switch between the effective user ID of the executable and the real user ID. On others, switching to the real user ID is final; some of those systems provide the setreuid function instead to switch the effective and real user ID. The effect when a program run by the superuser calls setuid varies among systems. 
+\item[snprintf]
+\
+
+    If this is not available, then in some cases it will be reasonable to simply use sprintf, and in others you will need to write a little routine to estimate the required length and allocate an appropriate buffer before calling sprintf. 
+\item[strcasecmp]
+\item[strdup]
+\item[strncasecmp]
+\
+
+    You can normally provide your own version of these simple functions. 
+\item[valloc]
+\
+
+    When this is not available, just use malloc instead. 
+\item[vfork]
+\
+
+    When this is not available, just use fork instead.
+\end{description}
+
+\subsection{Cross-Unix System Interfaces}
+
+There are several Unix system interfaces which have associated portability issues. We do not have the space here to discuss all of these in detail across all Unix systems. However, we mention them here to indicate issues where you may need to consider portability. 
+
+\begin{description}
+\item[`curses']
+\item[`termcap']
+\item[`terminfo']
+\
+
+    Many Unix systems provide the `curses' interface for simple graphical terminal access, but the name of the library varies. Typical names are `-lcurses' or `-lncurses'. Some Unix systems do not provide `curses', but do provide the `-ltermcap' or `-lterminfo' library. The latter libraries only provide an interface to the `termcap' file or `terminfo' files. These files contain information about specific terminals, the difference being mainly the manner in which they are stored. 
+\item[`proc file system']
+\
+
+    The `/proc' file system is not available on all Unix systems, and when it is available the actual set of files and their format varies. 
+\item[`pseudo terminals']
+\
+
+    All Unix systems provide pseudo terminals, but the interface to obtain them varies widely. We recommend examining the configuration of an existing program which uses them, such as GNU emacs or Expect. 
+\item[`shared libraries']
+\
+
+    Shared libraries differ across Unix systems. The GNU libtool program was written to provide an interface to hide the differences. See section 10. Introducing GNU Libtool. 
+\item[`termios']
+\item[`termio']
+\item[`tty']
+\
+
+    The `termios' interface to terminals is standard on modern Unix systems. Avoid the older, non-portable, `termio' and `tty' interfaces (these interfaces are defined in `termio.h' and `sgtty.h', respectively). 
+\item[`threads']
+\
+
+    Many, but not all, Unix systems support multiple threads in a single process, but the interfaces differ. One thread interface, pthreads, was standardized in the 1996 edition of POSIX.1, so Unix systems are likely to converge on that interface over time. 
+\item[`utmp']
+\item[`wtmp']
+\
+
+    Most Unix systems maintain the `utmp' and `wtmp' files to record information about which users are logged onto the system. However, the format of the information in the files varies across Unix systems, as does the exact location of the files and the functions which some systems provide to access the information. Programs which merely need to obtain login information will be more portable if they invoke a program such as w. Programs which need to update the login information must be prepared to handle a range of portability issues. 
+\item[`X Window System']
+\
+
+Version 11 of the X Window System is widely available across Unix systems.
+The actual release number varies somewhat, as does the set of available 
+programs and window managers. Extensions such as OpenGL are not available 
+on all systems. 
+\end{description}
+
+\section{Unix/Windows Portability}
+
+Unix and Windows are very different operating systems, with very different APIs and functionality. However, it is possible to write programs which run on both Unix and Windows, with significant extra work and some sacrifice in functionality. For more information on how GNU Autotools can help you write programs which run on both Unix and Windows, see 25. Using GNU Autotools with Cygnus Cygwin. 
+
+\subsection{Unix/Windows Emulation}
+
+The simplest way to write a program which runs on both Unix and Windows is to use an emulation layer. This generally results in a program which runs, but does not really feel like other programs for the operating system in question.
+
+For example, the Cygwin package, which is freely available from Cygnus Solutions(33), provides a Unix API which works on Windows. This permits Unix programs to be compiled to run on Windows. It is even possible to run an X server in the Cygwin environment, so graphical programs will work as well, although they will not have the Windows look and feel. The Cygwin package is discussed in more detail in see section 25. Using GNU Autotools with Cygnus Cygwin.
+
+There are also commercial packages available to compile Unix programs for Windows (e.g., Interix) and to compile Windows programs on Unix (e.g., Bristol Technology).
+
+The main disadvantage with using an emulation layer is that the resulting programs have the wrong look and feel. They do not behave as users expect, so they are awkward to use. This is generally not acceptable for high quality programs. 
+
+\subsection{Unix/Windows Portable Scripting Language}
+
+Another approach to Unix/Windows portability is to develop the program using a portable scripting language. An example of such a scripting language is Tcl/Tk(34). Programs written in Tcl/Tk will work on both Unix and Windows (and on the Apple Macintosh operating system as well, for that matter). Graphical programs will more or less follow the look and feel for the platform upon which they are run. Since Tcl/Tk was originally developed on Unix, graphical Tcl/Tk programs will typically not look quite right to experienced Windows users, but they will be usable and of reasonable quality. Other portable scripting languages are Perl, Python, and Guile.
+
+One disadvantage of this approach is that scripting languages tend to be less efficient than straight C code, but it is often possible to recode important routines in C. Another disadvantage is the need to learn a new language, one which furthermore may not be well designed for large programming projects. 
+
+\subsection{Unix/Windows User Interface Library}
+
+Some programs' main interaction with the operating system is drawing on the screen. It is often possible to write such programs using a cross platform user interface library.
+
+A cross-platform user interface library is a library providing basic windowing functions which has been implemented separately for Unix and Windows. The program calls generic routines which are translated into the appropriate calls on each platform. These libraries generally provide a good look and feel on each platform, so this can be a reasonable approach for programs which do not require additional services from the system.
+
+The main disadvantage is the least common denominator effect: the libraries often only provide functionality which is available on both Unix and Windows. Features specific to either Unix or Windows may be very useful for the program, but they may not be available via the library. 
+
+\subsection{Unix/Windows Specific Code}
+
+When writing a program which should run on both Unix and Windows, it is possible to simply write different code for the two platforms. This requires a careful separation of the operating system interface, including the graphical user interface, from the rest of the program. An API must be designed to provide the system needs, and that API must be implemented separately on Unix and Windows. The API should be set at an appropriate level to avoid the least common denominator effect.
+
+This approach can be useful for a program which has significant platform independent computation as well as significant user interface or other system needs. It generally produces better results than the other approaches discussed above. The disadvantage is that this approach requires much more work that the others discussed above. 
+
+\subsection{Unix/Windows Issues}
+
+Whatever approach is used to support the program on both Unix and Windows, there are certain issues which may affect the design of the program, or many specific areas of the program. 
+
+\subsubsection{Text and Binary Files}\label{SSS_Text_and_Binary_Files}
+
+Windows supports two different types of files: text files and binary files. On Unix, there is no such distinction. On Windows, any program which uses files must know whether each file is text or binary, and open and use them accordingly.
+
+In a text file on Windows, each line is terminated with a carriage return character followed by a line feed character. When the file is read by a C program in text mode, the C library converts each carriage return/line feed pair into a single line feed character. If the file is read in binary mode, the program will see both the carriage return and the line feed.
+
+You may have seen this distinction when transferring files between Unix and Window systems via FTP. You need to set the FTP program into binary or text mode as appropriate for the file you want to transfer.
+
+When transferring a binary file, the FTP program simply transfers the data unchanged. When transferring a text file, the FTP program must convert each carriage return/line feed pair into a single line feed.
+
+When using the C standard library, a binary file is indicated by adding b after the r, w, or a in the call to fopen. When reading a text file, the program can not simply count characters and use that when computing arguments to fseek. 
+
+\subsubsection{File system Issues}
+
+There are several differences between the file systems used on Unix and Windows, mainly in the areas of what names can be used for files. The program doschk, which can be found in the gcc distribution, may be used on Unix to check for filenames which are not permitted on DOS or Windows. 
+
+
+\subsubsection{DOS Filename Restrictions}
+
+The older DOS FAT file systems have severe limitations on file names. These limitations no longer apply to Windows, but they do apply to DOS based systems such as DJGPP.
+
+A file name may consist of no more than 8 characters, followed by an optional extension of no more than 3 characters. This is commonly referred to as an 8.3 file name. Filenames are case insensitive.
+
+There are a couple of filenames which are treated specially. You can not name a file `aux' or `prn'. In some cases, you can not even use an extension, such as `aux.c'. These restrictions apply to DOS and also to at least some versions of Windows. 
+
+
+\subsubsection{Windows File Name Case}
+
+Windows normally folds case when referring to files, unlike Unix. That is, on Windows, the file names `file', `File', and `FiLe' all refer to the same file. You must be aware of this when porting Unix programs to Windows, as the Unix programs may expect that using different case is reflected in the file system.
+
+For example, the procedure used to build the program perl from source relies on distinguishing between the files PERL and perl. This fails on Windows.
+
+As a matter of interest, the Windows file system stores files under the name with which they were created. The DOS shell displays the names in all upper case. The Explorer shell displays them with each word in the file name capitalized. 
+
+\subsubsection{Whitespace in File Names}
+
+Both Unix and Windows file systems permit whitespace in file names. However, Unix users rarely take advantage of this, while Windows users often do. For example, many Windows systems use a directory named `Program Files', whose name has an embedded space. This is a clash of conventions.
+
+Many programs developed on Unix unintentionally assume that there will be no spaces in file and directory names, and behave mysteriously if any are encountered. On Unix these bugs will almost never be seen. On Windows, they will pop up immediately.
+
+When writing a program which must run on Windows, consider these issues. Don't forget to test it on directories and files with embedded spaces. 
+
+
+\subsubsection{Windows Separators and Drive Letters}
+
+On Unix, directories in a file name are seperated by a forward slash (`/').
+On Windows, directories are separated by a backward slash (`$\backslash$').
+For example, the Unix file `dir/file' on Windows would be `\verb+dir\file+'.(35)
+
+On Unix, a list of directories is normally separated by a colon (`:').
+On Windows, a list of directories is normally separated by a semicolon (`;').
+For example, a simple Unix search path might look like this: `/bin:/usr/bin'.
+The same search path on Windows would probably look like this:
+`\verb+c:\bin;c:\usr\bin+'.
+
+On Unix, the file system is a single tree rooted at the directory simply named `/'. On Windows, there are multiple file system trees. Absolute file names often start with a drive letter followed by a colon. Windows maintains a default drive, and a default directory on each drive, which can make it difficult for a program to convert a relative file name into the absolute file name intended by the user. Windows permits referring to files on other systems by using a file name which starts with two slashes followed by a system name. 
+
+\subsubsection{Miscellaneous Issues}
+
+Windows shared libraries (DLLs) are different from typical Unix shared libraries. They require special declarations for global variables declared in a shared library. Programs which use shared libraries must generally use special macros in their header files to define these appropriately. GNU libtool can help with some shared library issues, but not all.
+
+There are some Unix system features which are not supported under Windows: pseudo terminals, effective user ID, file modes with user/group/other permission, named FIFOs, an executable overriding functions called by shared libraries, select on anything other than sockets.
+
+There are some Windows system features which are not supported under Unix: the Windows event loop, many graphical capabilities, some aspects of the rich set of interthread communication mechanisms, the WSAAsyncSelect function. You should keep these issues in mind when designing and writing a program which should run on both Unix and Windows. 
+
+

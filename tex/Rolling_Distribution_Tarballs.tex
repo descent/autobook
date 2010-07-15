@@ -1,0 +1,114 @@
+\chapter{Rolling Distribution Tarballs}\label{C_Rolling_Distribution_Tarballs}
+There's something about the word `tarballs' that make you want to avoid them altogether, let alone get involved in the disgusting process of rolling one. And, in the past, that was apparently the attitude of most developers, as witnessed by the strange ways distribution tar archives were created and unpacked. Automake largely automates this tedious process, in a sense providing you with the obliviousness you crave.
+
+\section{Introduction to Distributions}
+
+The basic approach to creating a tar distribution is to run
+ 	
+\begin{Verbatim}[frame=single]
+make
+make dist
+\end{Verbatim}
+
+The generated tar file is named package-version.tar.gz, and will unpack into a directory named package-version. These two rules are mandated by the GNU Coding Standards, and are just good ideas in any case, because it is convenient for the end user to have the version information easily accessible while building a package. It removes any doubt when she goes back to an old tree after some time away from it. Unpacking into a fresh directory is always a good idea -- in the old days some packages would unpack into the current directory, requiring an annoying clean-up job for the unwary system administrator.
+
+The unpacked archive is completely portable, to the extent of Automake's ability to enforce this. That is, all the generated files (e.g., `configure') are newer than their inputs (e.g., `configure.in'), and the distributed `Makefile.in' files should work with any version of make. Of course, some of the responsibility for portability lies with you: you are free to introduce non-portable code into your `Makefile.am', and Automake can't diagnose this. No special tools beyond the minimal tool list (see section `Utilities in Makefiles' in The GNU Coding Standards) plus whatever your own `Makefile' and `configure' additions use, will be required for the end user to build the package.
+
+By default Automake creates a `.tar.gz' file. It notices if you are using GNU tar and arranges to create portable archives in this case. (27)
+
+People do sometimes want to make other sorts of distributions. Automake allows this through the use of options. 
+
+\begin{description}
+\item[dist-bzip2]
+\ 
+
+    Add a dist-bzip2 target, which creates a `.tar.bz2' file. These files are frequently smaller than the corresponding `.tar.gz' file.
+
+\item[dist-shar]
+\ 
+
+    Add a dist-shar target, which creates a shar archive.
+
+\item[dist-zip]
+\ 
+
+    Add a dist-zip target, which creates a zip file. These files are popular for Windows distributions.
+
+\item[dist-tarZ]
+\ 
+
+    Add a dist-tarZ target, which creates a `.tar.Z' file. This exists mostly for die-hard old-time Unix hackers; the rest of the world has moved on to gzip or bzip2.
+\end{description}
+
+\section{What goes in}
+
+Automake tries to make creating a distribution as easy as possible. The rules are set up by default to distribute those things which Automake knows belong in a distribution. For instance, Automake always distributes your `configure' script and your `NEWS' file. All the files Automake automatically distributes are shown by automake --help:
+
+\begin{Verbatim}[frame=single]
+$ automake --help
+...
+Files which are automatically distributed, if found:
+ABOUT-GNU     README          config.guess      ltconfig
+ABOUT-NLS     THANKS          config.h.bot      ltmain.sh
+AUTHORS       TODO            config.h.top      mdate-sh
+BACKLOG       acconfig.h      config.sub        missing
+COPYING       acinclude.m4    configure         mkinstalldirs
+COPYING.LIB   aclocal.m4      configure.in      stamp-h.in
+ChangeLog     ansi2knr.1      elisp-comp        stamp-vti
+INSTALL       ansi2knr.c      install-sh        texinfo.tex
+NEWS          compile         libversion.in     ylwrap
+...
+\end{Verbatim}
+
+Automake also distributes some files about which it has no built-in knowledge, but about which it learns from your `Makefile.am'. For instance, the source files listed in a `\_{}SOURCES' variable go into the distribution. This is why you ought to list uninstalled header files in the `\_{}SOURCES' variable: otherwise you'll just have to introduce another variable to distribute them -- Automake will only know about them if you tell it.
+
+Not all primaries are distributed by default. The rule is arbitrary, but pretty simple: of all the primaries, only `\_{}TEXINFOS' and `\_{}HEADERS' are distributed by default. (Sources that make up programs and libraries are also distributed by default, but, perhaps confusingly, `\_{}SOURCES' is not considered a primary.)
+
+While there is no rhyme, there is a reason: defaults were chosen based on feedback from users. Typically, `enough' reports of the form `I auto-generate my `\_{}SCRIPTS'. How do I prevent them from ending up in the distribution?' would cause a change in the default.
+
+Although the defaults are adequate in many situations, sometimes you have to distribute files which aren't covered automatically. It is easy to add additional files to a distribution; simply list them in the macro `EXTRA\_{}DIST'. You can list files in subdirectories here. You can also list a directory's name here and the entire contents will be copied into the distribution by make dist. Use this last feature with care. A typical failure is that you'll put a `temporary' file in the directory and then it will end up in the distribution when you forget to remove it. Similarly, version control files, such as a `CVS' subdirectory, can easily end up in a distribution this way.
+
+If a primary is not distributed by default, but in your case it ought to be, you can easily correct it with `EXTRA\_{}DIST': 
+
+\begin{Verbatim}[frame=single]
+EXTRA_DIST = $(bin_SCRIPTS)
+\end{Verbatim}
+
+The next major Automake release (28) will have a better method for controlling whether primaries do or do not go into the distribution. In 1.5 you will be able to use the `dist' and `nodist' prefixes to control distribution on a per-variable basis. You will even be able to simultaneously use both prefixes with a given primary to include some files and omit others:
+
+\begin{Verbatim}[frame=single]
+dist_bin_SCRIPTS = distribute-this
+nodist_bin_SCRIPTS = but-not-this
+\end{Verbatim}
+
+\section{The distcheck rule}
+
+The make dist documentation sounds nice, and make dist did do something, but how do you know it really works? It is a terrible feeling when you realize your carefully crafted distribution is missing a file and won't compile on a user's machine.
+
+I wouldn't write such an introduction unless Automake provided a solution. The solution is a smoke test known as make distcheck. This rule performs a make dist as usual, but it doesn't stop there. Instead, it then proceeds to untar the new archive into a fresh directory, build it in a fresh build directory separate from the source directory, install it into a third fresh directory, and finally run make check in the build tree. If any step fails, distcheck aborts, leaving you to fix the problem before it will create a distribution.
+
+While not a complete test -- it only tries one architecture, after all -- distcheck nevertheless catches most packaging errors (as opposed to portability bugs), and its use is highly recommended. 
+
+\section{Some caveats}
+
+Earlier, if you were awake, you noticed that I recommended the use of make before make dist or make distcheck. This practice ensures that all the generated files are newer than their inputs. It also solves some problems related to dependency tracking (see section 19. Advanced GNU Automake Usage).
+
+Note that currently Automake will allow you to make a distribution when maintainer mode is off, or when you do not have all the required maintainer tools. That is, you can make a subtly broken distribution if you are motivated or unlucky. This will be addressed in a future version of Automake. 
+
+\section{Implementation}
+
+In order to understand how to use the more advanced dist-related features, you must first understand how make dist is implemented. For most packages, what we've already covered will suffice. Few packages will need the more advanced features, though I note that many use them anyway.
+
+The dist rules work by building a copy of the source tree and then archiving that copy. This copy is made in stages: a `Makefile' in a particular directory updates the corresponding directory in the shadow tree. In some cases, automake is run to create a new `Makefile.in' in the new distribution tree.
+
+After each directory's `Makefile' has had a chance to update the distribution directory, the appropriate command is run to create the archive. Finally, the temporary directory is removed.
+
+If your `Makefile.am' defines a dist-hook rule, then Automake will arrange to run this rule when the copying work for this directory is finished. This rule can do literally anything to the distribution directory, so some care is required -- careless use will result in an unusable distribution. For instance, Automake will create the shadow tree using links, if possible. This means that it is inadvisable to modify the files in the `dist' tree in a dist hook. One common use for this rule is to remove files that erroneously end up in the distribution (in rare situations this can happen). The variable `distdir' is defined during the dist process and refers to the corresponding directory in the distribution tree; `top\_{}distdir' refers to the root of the distribution tree.
+
+Here is an example of removing a file from a distribution: 
+
+\begin{Verbatim}[frame=single]
+dist-hook:
+        -rm $(distdir)/remove-this-file
+\end{Verbatim}
+

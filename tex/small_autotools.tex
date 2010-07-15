@@ -1,0 +1,1831 @@
+\chapter{A Small GNU Autotools Project}\label{C_A_Small_GNU_Autotools_Project}
+
+
+This chapter introduces a small--but real--worked example, to illustrate 
+some of the features, and highlight some of the pitfalls ({\MjQ\cH184}\z{\MtQ\cH201}; {\MeQ\cH11}\z{\MeQ\cH80}) , of the 
+GNU Autotools discussed \underline{so far} ({\MaQ\cH131}\z{\MbQ\cH241}\z{\MaQ\cH135}\z{\MbQ\cH209}\z{\MbQ\cH162}). All of the source 
+can be downloaded from 
+the book's web page\footnote{http://sources.redhat.com/autobook/}.
+The text is peppered ({\MaQ\cH85}\z{\MdQ\cH48}\z{\MbQ\cH197} [ (+with )]) with my own pet ({\MbQ\cH41}\z{\MbQ\cH60}\z{\MbQ\cH237}) ideas,
+accumulated ({\MhQ\cH218}\z{\McQ\cH9}, {\McQ\cH9}\z{\MiQ\cH27}; {\McQ\cH9}\z{\MxQ\cH217}) over a several years of working with the 
+GNU Autotools and you should be able to easily apply these to your 
+own projects. I will begin by describing some of the choices and problems I 
+encountered during the early stages of the development of this project. 
+Then by way of illustration of the issues covered, move on to showing 
+you a general infrastructure ({\MeQ\cH33}\z{\MhQ\cH128}\z{\MbQ\cH29}\z{\McQ\cH113}) that I use as the basis for all 
+of my own projects, followed by the specifics ({\MiQ\cH204}\z{\MbQ\cH56}, {\McQ\cH30}\z{\McQ\cH20}) of the 
+implementation of a portable command line shell library. This 
+chapter then finishes with a sample shell application that uses that library. 
+
+
+Later, in chapter \ref{C_A_Large_GNU_Autotools_Project}
+A Large GNU Autotools Project, page \pageref{C_A_Large_GNU_Autotools_Project}
+and chapter \ref{C_A_Complex_GNU_Autotools_Project} A Complex GNU 
+Autotools Project,
+page \pageref{C_A_Complex_GNU_Autotools_Project}, the example introduced 
+here will be gradually ({\MjQ\cH77}\z{\MbQ\cH165}\z{\MaQ\cH203}, {\MgQ\cH218}\z{\MgQ\cH218}\z{\MaQ\cH203}) expanded as new features 
+of GNU Autotools are revealed ({\MbQ\cH4}\z{\MbQ\cH219}, {\MjQ\cH233}\z{\MjQ\cH208}\z{\MaQ\cH124}) .
+
+\section{GNU Autotools in Practice}
+
+
+This section details some of the specific problems I encountered when 
+starting this project, and is representative ({\MaQ\cH72}\z{\McQ\cH91}\z{\MbQ\cH52}\z{\MbQ\cH237}, {\MdQ\cH116}\z{\MeQ\cH25}\z{\MbQ\cH237}) of 
+the sorts ({\McQ\cH7}\z{\McQ\cH233}, {\MaQ\cH185}\z{\McQ\cH7}, {\McQ\cH233}\z{\MeQ\cH25}, {\MbQ\cH52}\z{\McQ\cH148}; {\MbQ\cH52}\z{\MbQ\cH143}) of things you are likely ({\MbQ\cH39}\z{\MaQ\cH170}\z{\McQ\cH63}\z{\MbQ\cH237})
+to want to do in projects of your own, but for which the correct solution 
+may not be immediately evident ({\MbQ\cH112}\z{\MjQ\cH233}\z{\MbQ\cH237}; {\MbQ\cH112}\z{\MbQ\cH235}\z{\MbQ\cH237}). You can always refer back to 
+this section for some inspiration ({\MjQ\cH209}\z{\MbQ\cH62}) if you come across similar situations.
+I will talk about some of the decisions I made about the structure of the 
+project, and also the trade-offs for the other side of the argument --
+you might find the opposite choice to theone I make here is 
+more relevant a particular project of yours. 
+
+\subsection{Project Directory Structure}\label{pds}
+
+
+Before starting to write code for any project, you need to decide on 
+the directory structure you will use to organise (=organized) the code.
+I like to build each component of a project in its own subdirectory,
+and to keep the configuration sources separate from the source code.
+The great majority ({\MaQ\cH214}\z{\MbQ\cH98}, {\McQ\cH172}\z{\MaQ\cH154}\z{\MbQ\cH98}, {\MaQ\cH215}\z{\MaQ\cH214}\z{\MbQ\cH98}) of GNU projects I 
+have seen use a similar method, so adopting it yourself will likely 
+make your project more familiar to your developers 
+by association ({\MaQ\cH155}\z{\MbQ\cH125}, {\MaQ\cH116}\z{\MbQ\cH125}, {\MbQ\cH254}\z{\MaQ\cH200}). 
+
+
+The top level directory is used for configuration files, such as `configure'
+and `aclocal.m4', and for a few other sundry ({\MaQ\cH174}\z{\MbQ\cH31}\z{\MaQ\cH174}\z{\MbQ\cH154}\z{\MbQ\cH237}, {\MjQ\cH198}\z{\MbQ\cH237}, {\MaQ\cH174}\z{\McQ\cH7}\z{\MbQ\cH237})
+files, `README' and a copy of the project license for example. 
+
+
+Any significant libraries will have a subdirectory of their own, containing all of the sources and headers for that library along with a `Makefile.am' and anything else that is specific to just that library. Libraries that are part of a small like group, a set of pluggable application modules for example, are kept together in a single directory. 
+
+
+The sources and headers for the project's main application will be stored in yet another subdirectory, traditionally named `src'. There are other conventional directories your developers might expect too: A `doc' directory for project documentation; and a `test' directory for the project self test suite. 
+
+
+To keep the project top-level directory as uncluttered ({\MaQ\cH46}\z{\MdQ\cH126}\z{\MdQ\cH18}\z{\MbQ\cH237}; {\MbQ\cH99}\z{\MkQ\cH53}\z{\MbQ\cH237})
+as possible, as I like to do, you can take advantage of
+Autoconf's `AC\_{}CONFIG\_{}AUX\_{}DIR' by creating another durectory,
+say `config', which will be used to store many of the GNU Autotools 
+intermediate ({\MaQ\cH50}\z{\McQ\cH200}\z{\MbQ\cH237}, {\MbQ\cH2}\z{\MaQ\cH50}\z{\MbQ\cH237}; {\MaQ\cH50}\z{\MeQ\cH25}\z{\MbQ\cH237}) files, such as install-sh. I always
+store all project specific Autoconf M4 macros to this same subdirectory. 
+
+
+So, this is what you should start with:
+
+\begin{Verbatim}[frame=single]
+$ pwd
+~/mypackage
+$ ls -F
+Makefile.am  config/     configure.in  lib/  test/
+README       configure*  doc/          src/
+\end{Verbatim}
+
+\subsection{C Header Files}\label{chf}
+
+
+There is a small amount of boiler-plate that should be added to all header files, not least of which is a small amount of code to prevent the contents of the header from being scanned multiple times. This is achieved by enclosing the entire file in a preprocessor conditional which evaluates to false after the first time it has been seen by the preprocessor. Traditionally, the macro used is in all upper case, and named after the installation path without the installation prefix. Imagine a header that will be intalled to `/usr/local/include/sys/foo.h', for example. The preprocessor code would be as follows: 
+
+
+\begin{Verbatim}[frame=single]
+#ifndef SYS_FOO_H
+#define SYS_FOO_H 1
+...
+#endif /* !SYS_FOO_H */
+\end{Verbatim}
+
+
+
+\underline{Apart from} ({\McQ\cH206}\z{\McQ\cH199}; {\McQ\cH206}... {\MaQ\cH53}\z{\MaQ\cH213}) comments,
+the entire content of the rest of this header file 
+must be between these few lines. It is worth mentioning that inside the 
+enclosing ifndef, the macro SYS\_{}FOO\_{}H must be defined before any other 
+files are \#included. It is a common mistake to not define that macro until 
+the end of the file, but mutual ({\MbQ\cH243}\z{\MdQ\cH19}\z{\MbQ\cH237}, {\MfQ\cH11}\z{\MbQ\cH164}\z{\MbQ\cH237}) dependency cycles are 
+only stalled ({\MfQ\cH122}... {\McQ\cH201}\z{\MaQ\cH112}\z{\MhQ\cH69}\z{\MiQ\cH74}) if the 
+guard macro is defined before the \#include which starts that
+cycle\footnote{An \#include cycle is the situation where file `a.h' \#includes
+file `b.h', and `b.h' \#includes file `a.h' -- either directly or through 
+some longer chain of \#includes. }. 
+
+
+If a header is designed to be installed, it must \#include other installed 
+project headers from the local tree using angle-brackets. There are some 
+implications to working like this: 
+
+\begin{itemize}
+\item You must be careful that the names of header file directories in the 
+source tree match the names of the directories in the install tree.
+For example, when I plan to install the aforementioned ({\MaQ\cH135}\z{\McQ\cH222}\z{\MbQ\cH84}\z{\MaQ\cH163}\z{\MbQ\cH237}, {\MaQ\cH44}\z{\MjQ\cH72}\z{\MbQ\cH237})
+`foo.h' to `/usr/local/include/project/foo.h', from which it will be included 
+using `\verb+#include <project/foo.h>+', then in order for the same 
+include line to work in the source tree, I must name the source directory 
+it is installed from `project' too, or other headers which use it will not 
+be able to find it until after it has been installed. 
+
+\item When you come to developing the next version of a project laid out 
+in this way, you must be careful about finding the correct header. Automake 
+\underline{takes care of} ({\MbQ\cH206}\z{\MjQ\cH232}, {\McQ\cH84}\z{\MbQ\cH220}) that for you by using `-I' options 
+that force the compiler 
+to look for uninstalled headers in the current source directory before 
+searching the system directories for installed headers of the same name. 
+
+\item You don't have to install all of your headers to `/usr/include' -- you 
+can use subdirectories. And all without having to rewrite the headers at 
+install time. 
+\end{itemize}
+
+\subsection{C++ Compilers}
+
+
+In order for a C++ program to use a library compiled with a C compiler,
+it is neccessary for any symbols exported from the C library to be declared
+between \verb+`extern "C" {'+ and \verb+`}'+. This code is important,
+because a C++ compiler mangles\footnote{For an explanation of name mangling 
+See chapter \ref{Writing_Portable_CPP_with_GNU_Autotools} Writing 
+Portable C++ with GNU Autotools,
+page \pageref{Writing_Portable_CPP_with_GNU_Autotools}.}
+all variable and function names, where as a C compiler does not. On the 
+other hand, a C compiler will not understand these lines, so you must be 
+careful to make them invisible to the C compiler. 
+
+
+Sometimes you will see this method used, written out in long hand in every installed header file, like this: 
+
+\begin{Verbatim}[frame=single]
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+...
+
+#ifdef __cplusplus
+}
+#endif
+\end{Verbatim}
+
+But that is a lot of unnecessary typing if you have a few dozen ({\MbQ\cH22}\z{\MdQ\cH1}, {\McQ\cH114}\z{\MaQ\cH214})
+headers in your project. Also the additional braces tend to confuse text 
+editors, such as emacs, which do automatic source indentation ({\McQ\cH237}\z{\McQ\cH87}\z{\MhQ\cH242}\z{\MfQ\cH167}{\MaQ\cH2} {\MhQ\cH242}\z{\MbQ\cH143})
+based on brace characters. 
+
+
+Far better, then, to declare them as macros in a common header file,
+and use the macros in your headers: 
+
+
+
+\begin{Verbatim}[frame=single]
+#ifdef __cplusplus
+#  define BEGIN_C_DECLS extern "C" {
+#  define END_C_DECLS   }
+#else /* !__cplusplus */
+#  define BEGIN_C_DECLS
+#  define END_C_DECLS
+#endif /* __cplusplus */
+\end{Verbatim}
+
+
+
+I have seen several projects that name such macros with a leading 
+underscore ({\MaQ\cH202}... {\MaQ\cH45}\z{\MdQ\cH149}\z{\McQ\cH40}) -- `\_{}BEGIN\_{}C\_{}DECLS'. Any symbol with a 
+leading underscore 
+is reserved for use by the compiler implementation, so you shouldn't name 
+any symbols of your own in this way. By way of example, I recently 
+ported the Small\footnote{http://www.compuphase.com/small.htm }
+language compiler to Unix, and almost all of the 
+work was writing a Perl script to rename huge numbers of symbols in the 
+compiler's reserved namespace to something more
+sensible ({\MbQ\cH112}\z{\MgQ\cH4}\z{\MbQ\cH237}; {\MaQ\cH175}\z{\MbQ\cH56}\z{\MbQ\cH220}\z{\MbQ\cH237}, {\MbQ\cH60}\z{\McQ\cH133}\z{\MaQ\cH131}\z{\MbQ\cH237}, {\MaQ\cH244}\z{\McQ\cH103}\z{\MaQ\cH131}\z{\MbQ\cH237}) so that GCC could 
+even parse the sources. Small was originally developed on Windows, and the 
+author had used a lot of symbols with a leading underscore. Although his 
+symbol names didn't \underline{clash with} ({\McQ\cH68}... {\MiQ\cH167}\z{\McQ\cH12}) his own compiler,
+in some cases they were 
+the same as symbols used by GCC. 
+
+
+\subsection{Function Definitions}
+
+
+As a stylistic ({\MrQ\cH68}\z{\MhQ\cH127}\z{\MbQ\cH100}\z{\McQ\cH241}\z{\MbQ\cH237}; {\MbQ\cH100}\z{\McQ\cH241}\z{\McQ\cH127}\z{\MbQ\cH237}) convention, the return types for all 
+function definitions should be on a separate line. The main reason for this is 
+that it makes it very easy to find the functions in source file, by looking 
+for a single identifier at the start of a line followed by an open 
+parenthesis ({\MaQ\cH198}\z{\MfQ\cH142}\z{\McQ\cH85}) : 
+
+
+\begin{Verbatim}[frame=single]
+$ egrep '^[_a-zA-Z][_a-zA-Z0-9]*[ \t]*\(' error.c
+set_program_name (const char *path)
+error (int exit_status, const char *mode, const char *message)
+sic_warning (const char *message)
+sic_error (const char *message)
+sic_fatal (const char *message)
+\end{Verbatim}
+
+
+
+There are emacs lisp functions and various code analysis tools, such as 
+ansi2knr (see subsection \ref{ss_k_r_compilers} K\&R Compilers,
+page \pageref{ss_k_r_compilers}), which \underline{rely on} ({\MaQ\cH89}\z{\MjQ\cH10}, {\MaQ\cH89}\z{\MjQ\cH212})
+this formatting convention, too. Even if you don't use those tools yourself,
+your fellow ({\MdQ\cH35}\z{\MdQ\cH45}; {\MaQ\cH176}\z{\MaQ\cH57}) developers might like to,
+so it is a good convention to adopt. 
+
+\subsection[Fallback Function Implementations]{Fallback ({\MlQ\cH168}\z{\McQ\cH162}, {\MaQ\cH170}\z{\MaQ\cH89}\z{\MjQ\cH212}\z{\MbQ\cH237}\z{\MbQ\cH137}\z{\McQ\cH97}) Function Implementations}\label{ffi}
+
+
+Due to the huge number of Unix varieties in common use today, many of the C 
+library functions that you \underline{take for} ({\McQ\cH119}\z{\MbQ\cH209}) granted ({\MfQ\cH164}\z{\MaQ\cH56}) on 
+your prefered development platform are very likely missing from some of 
+the architectures you would like your code to compile on.
+Fundamentally ({\MeQ\cH33}\z{\MhQ\cH128}\z{\MaQ\cH203}; {\MgQ\cH59}\z{\MbQ\cH133}\z{\MaQ\cH203}; {\McQ\cH189}\z{\McQ\cH98}\z{\MaQ\cH203}) there are two ways to cope with this: 
+
+\begin{itemize}
+\item Use only the few library calls that are available everywhere. In 
+reality this is not actually possible because there are two lowest common 
+denominators ({\MaQ\cH125}\z{\MgQ\cH130}; {\MaQ\cH183}\z{\MaQ\cH177}\z{\McQ\cH54}; {\McQ\cH150}\z{\MgQ\cH196}) with mutually ({\MdQ\cH19}\z{\MbQ\cH243}, {\MfQ\cH11}\z{\MbQ\cH164})
+exclusive ({\MfQ\cH167}\z{\MaQ\cH213}\z{\MbQ\cH237}; {\McQ\cH206}\z{\MaQ\cH213}\z{\MbQ\cH237}; {\MaQ\cH114}\z{\McQ\cH182}\z{\MbQ\cH237}; {\MdQ\cH241}\z{\McQ\cH248}\z{\MbQ\cH237}) APIs,
+one \underline{rooted in} ({\MbQ\cH191}\z{\MgQ\cH84}\z{\MbQ\cH107}; {\MgQ\cH59}\z{\MgQ\cH196}\z{\MbQ\cH107}) BSD Unix
+(`bcopy', `rindex') and the other in SYSV Unix (`memcpy', `strrchr'). The 
+only way to deal with this is to define one API 
+\underline{in terms of} ({\MaQ\cH255}... {\McQ\cH55}\z{\McQ\cH127}; {\MaQ\cH202}... {\MbQ\cH106}\z{\McQ\cH222}) the other 
+using the preprocessor. The newer POSIX standard 
+deprecates ({\McQ\cH59}\z{\MbQ\cH112}\z{\MaQ\cH46}\z{\MjQ\cH14}\z{\MbQ\cH65}; {\MaQ\cH165}\z{\MaQ\cH250}; {\MjQ\cH47}\z{\McQ\cH101}) many of the BSD 
+originated calls (with exceptions such as the BSD socket API). Even on 
+non-POSIX platforms, there has been so much cross pollination ({\MfQ\cH164}\z{\MhQ\cH195} ({\MaQ\cH84}\z{\MbQ\cH224}) )
+that often both varieties of a given call may be provided, however you 
+would be wise to write your code using POSIX endorsed ({\MjQ\cH14}\z{\MaQ\cH176}; {\McQ\cH119}\z{\MaQ\cH170}) calls,
+and where they are missing, define them in terms of whatever the 
+host platform provides. 
+
+This approach requires a lot of knowledge about various system libraries and 
+standards documents, and can leave you with reams ({\MaQ\cH215}\z{\McQ\cH190}) of preprocessor 
+code to handle the differences between APIS. You will also need to perform a 
+lot of checking in `configure.in' to figure out which calls are available.
+For example, to allow the rest of your code to use the `strcpy' call with 
+impunity ( ({\MfQ\cH96}\z{\MiQ\cH3}{\MaQ\cH2} {\MfQ\cH184}\z{\MaQ\cH220}{\MaQ\cH2} {\MdQ\cH97}\z{\MaQ\cH239}\z{\McQ\cH16}\z{\MbQ\cH237}) {\MaQ\cH110}\z{\McQ\cH206}) , you would need the 
+following code in `configure.in': 
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_FUNCS(strcpy bcopy)
+\end{Verbatim}
+
+And the following preprocessor code in a header file that is seen by 
+every source file: 
+
+\begin{Verbatim}[frame=single]
+#if !HAVE_STRCPY
+#  if HAVE_BCOPY
+#    define strcpy(dest, src) \
+      bcopy (src, dest, 1 + strlen (src))
+#  else /* !HAVE_BCOPY */
+     error no strcpy or bcopy
+#  endif /* HAVE_BCOPY */
+#endif /* HAVE_STRCPY */
+\end{Verbatim}
+
+\item Alternatively you could provide your own fallback implementations of 
+function calls you know are missing on some platforms. In practice you don't 
+need to be as knowledgable about problematic ({\MaQ\cH189}\z{\McQ\cH230}\z{\MbQ\cH237}; {\MhQ\cH79}\z{\McQ\cH216}\z{\MbQ\cH237}; {\MaQ\cH46}\z{\MbQ\cH252}\z{\MaQ\cH236}\z{\MbQ\cH237})
+functions when using this approach.
+You can look in GNU libiberty\footnote{Available at
+ftp://sourceware.cygnus.com/pub/binutils/.} or Fran\c{c}ois Pinard's libit 
+project\footnote{Distributed from http://www.iro.umontreal.ca/~pinard/libit.}
+to see for which functions other GNU developers have needed to implement 
+fallback code. The libit project is especially useful in this respect
+({\McQ\cH201}\z{\MaQ\cH91}; {\MbQ\cH106}\z{\McQ\cH222}, {\McQ\cH79}\z{\MhQ\cH105}\z{\McQ\cH245}) as it comprises canonical ({\MbQ\cH153}\z{\MbQ\cH196}\z{\MbQ\cH237}; {\MbQ\cH158}\z{\MeQ\cH110}\z{\MbQ\cH237}) versions of 
+fallback functions, and suitable Autoconf macros assembled from across the 
+entire GNU project. I won't give an example of setting up your package to 
+use this approach, since that is how I have chosen to structure the 
+project described in this chapter. 
+\end{itemize}
+
+Rather than writing code to the lowest common denominator of system libraries,
+I am a strong advocate ({\MbQ\cH84}\z{\MdQ\cH76}\z{\McQ\cH54}; {\MfQ\cH203}\z{\McQ\cH136}\z{\McQ\cH54}) of the latter school of thought in the 
+majority ({\MaQ\cH214}\z{\MbQ\cH98}, {\McQ\cH172}\z{\MaQ\cH154}\z{\MbQ\cH98}, {\MaQ\cH215}\z{\MaQ\cH214}\z{\MbQ\cH98}) of cases. As with all things it pays to 
+take a pragmatic ({\MaQ\cH142}\z{\MaQ\cH245}\z{\MbQ\cH237}; {\MaQ\cH245}\z{\MeQ\cH225}\z{\MbQ\cH237}) approach; don't be afraid of the 
+\underline{middle ground} ({\MeQ\cH93}\z{\MaQ\cH155}, {\MaQ\cH50}\z{\McQ\cH200}\z{\McQ\cH13}\z{\MaQ\cH210}) -- weigh ({\McQ\cH53}\z{\MbQ\cH63}; {\MbQ\cH158}\z{\MiQ\cH169}) the options 
+on a case by case basis.
+
+\subsection{K\&R Compilers}\label{ss_k_r_compilers}
+
+K\&R C is the name now used to describe the original C language specified 
+by Brian Kernighan and Dennis Ritchie (hence, `K\&R'). I have yet to 
+see a C compiler that doesn't support code written in the K\&R style, yet 
+it has fallen very much into disuse ({\MaQ\cH46}\z{\MbQ\cH224}; {\MeQ\cH242}\z{\MgQ\cH74}) \underline{in favor of}
+({\MjQ\cH14}\z{\MbQ\cH65}...; {\MbQ\cH88}\z{\MbQ\cH77}...; {\MbQ\cH127}\z{\MaQ\cH130}\z{\MbQ\cH107}...) the newer ANSI C standard.
+Although it is increasingly common for vendors to unbundle their ANSI C 
+compiler, the GCC project\footnote{GCC must be compilable by K\&R compilers so 
+that it can be built and installed in an ANSI compiler free environment.}
+is available for all of the architectures I have ever used. 
+
+
+There are four differences between the two C standards: 
+
+\begin{enumerate}
+\item ANSI C expects full type specification in function prototypes, such as 
+you might supply in a library header file:
+
+\begin{Verbatim}[frame=single]
+extern int functionname (const char *parameter1,
+                         size_t parameter 2);
+\end{Verbatim}
+
+The nearest equivalent in K\&R style C is a forward declaration, which 
+allows you to use a function before its corresponding definition: 
+
+\begin{Verbatim}[frame=single]
+extern int functionname ();
+\end{Verbatim}
+
+As you can imagine, K\&R has very bad type safety, and does not perform any checks that only function arguments of the correct type are used. 
+
+
+\item The function headers of each function definition are written differently. Where you might see the following written in ANSI C: 
+
+\begin{Verbatim}[frame=single]
+int
+functionname (const char *parameter1, size_t parameter2)
+{
+  ...
+}
+\end{Verbatim}
+
+
+
+K\&R expects the parameter type declarations separately, like this: 
+
+\begin{Verbatim}[frame=single]
+int
+functionname (parameter1, parameter2)
+     const char *parameter1;
+     size_t parameter2;
+{
+  ...
+}
+\end{Verbatim}
+
+\item There is no concept of an untyped pointer in K\&R C. Where you might be used to seeing `void *' pointers in ANSI code, you are forced to overload the meaning of `char *' for K\&R compilers. 
+
+\item Variadic functions are handled with a different API in K\&R C,
+imported with `\verb+#include <varargs.h>+'. A K\&R variadic function definition looks like this:
+
+\begin{Verbatim}[frame=single]
+int
+functionname (va_alist)
+     va_dcl
+{
+  va_list ap;
+  char *arg;
+
+  va_start (ap);
+  ...
+  arg = va_arg (ap, char *);
+  ...
+  va_end (ap);
+
+  return arg ? strlen (arg) : 0;
+}
+\end{Verbatim}
+
+ANSI C provides a similar API, imported with `\verb+#include <stdarg.h>+',
+though it cannot express a variadic function with no named arguments such 
+as the one above. In practice, this isn't a problem since you always 
+need at least one parameter, either to specify the total number of 
+arguments somehow, or else to mark the end of the argument list. An 
+ANSI variadic function definition looks like this: 
+
+\begin{Verbatim}[frame=single]
+int
+functionname (char *format, ...)
+{
+  va_list ap;
+  char *arg;
+
+  va_start (ap, format);
+  ...
+  arg = va_arg (ap, char *);
+  ...
+  va_end (ap);
+
+  return format ? strlen (format) : 0;
+}
+
+\end{Verbatim}
+
+\end{enumerate}
+
+Except in very rare cases where you are writing a low level project
+(GCC for example), you probably don't need to worry about K\&R compilers 
+too much. However, supporting them can be very easy, and if you are 
+so inclined ({\MdQ\cH98}\z{\MaQ\cH178}\z{\MbQ\cH237}, {\MdQ\cH98}\z{\MfQ\cH233}\z{\MbQ\cH237}), can be handled either by employing the ansi2knr 
+program supplied with Automake, or by careful use of the preprocessor. 
+
+
+Using ansi2knr in your project is described in some detail in 
+section `Automatic de-ANSI-fication' in The Automake Manual,
+but \underline{boils down} ({\MmQ\cH107}\z{\MgQ\cH235}, {\MmQ\cH115}\z{\MgQ\cH235}, {\MeQ\cH57}\z{\MhQ\cH242}, {\McQ\cH21}\z{\MaQ\cH147}; {\MbQ\cH166}\z{\McQ\cH33}) to the following: 
+
+\begin{itemize}
+\item Add this macro to your `configure.in' file: 
+
+\begin{Verbatim}[frame=single]
+AM_C_PROTOTYPES
+\end{Verbatim}
+
+\item Rewrite the contents of `LIBOBJS' and/or `LTLIBOBJS' in the 
+following fashion: 
+
+
+\begin{Verbatim}[frame=single]
+# This is necessary so that .o files in LIBOBJS are also
+# built via the ANSI2KNR-filtering rules.
+Xsed='sed -e "s/^X//"'
+LIBOBJS=`echo X"$LIBOBJS"|\
+  [$Xsed -e 's/\.[^.]* /.\$U& /g;s/\.[^.]*$/.\$U&/']`
+\end{Verbatim}
+
+\end{itemize}
+
+Personally, I dislike this method, since every source file is filtered and 
+rewritten with ANSI function prototypes and declarations converted to K\&R 
+style adding a fair overhead in additional files in your build tree,
+and in compilation time. This would be reasonable ({\MaQ\cH175}\z{\MbQ\cH220}\z{\MbQ\cH237}, {\MbQ\cH163}\z{\MbQ\cH231}\z{\MbQ\cH237}; {\MjQ\cH95}\z{\MbQ\cH231}\z{\MbQ\cH237})
+were the abstraction sufficient to allow you to forget about K\&R entirely,
+but ansi2knr is a simple program, and does not address any of the other
+differences between compilers that I raised above, and it cannot handle macros 
+in your function prototypes of definitions. If you decide to use ansi2knr in 
+your project, you must make the decision before you write any code, and be 
+aware of its limitations as you develop. 
+
+
+For my own projects, I prefer to use a set of preprocessor macros 
+\underline{along with} ({\McQ\cH68}... {\MaQ\cH202}\z{\McQ\cH248}\z{\McQ\cH150}; {\MaQ\cH202}... {\MaQ\cH74}\z{\MaQ\cH213}) a few stylistic
+({\MrQ\cH68}\z{\MhQ\cH127}\z{\MbQ\cH100}\z{\McQ\cH241}\z{\MbQ\cH237}; {\MbQ\cH100}\z{\McQ\cH241}\z{\McQ\cH127}\z{\MbQ\cH237}) conventions so that all of the differences 
+between K\&R and ANSI compilers are actually addressed, and so that the 
+unfortunate few who have no access to an ANSI compiler (and who cannot 
+use GCC for some reason) needn't suffer ({\MjQ\cH96}\z{\MaQ\cH167}; {\McQ\cH37}\z{\MgQ\cH118}) the overheads of ansi2knr. 
+
+
+The four differences in style listed at the beginning of this subsection 
+are addressed as follows: 
+
+\begin{enumerate}
+\item The function protoype argument lists are declared inside a PARAMS macro 
+invocation so that K\&R compilers will still be able to compile the 
+source tree. PARAMS removes ANSI argument lists from function prototypes for 
+K\&R compilers. Some developers continue to use \_{}\_{}P for this purpose,
+but strictly speaking, macros starting with `\_{}' (and especially `\_{}\_{}') 
+are reserved for the compiler and the system headers, so using `PARAMS',
+as follows, is safer: 
+
+\begin{Verbatim}[frame=single]
+#if __STDC__
+#  ifndef NOPROTOS
+#    define PARAMS(args)      args
+#  endif
+#endif
+#ifndef PARAMS
+#  define PARAMS(args)        ()
+#endif
+\end{Verbatim}
+
+This macro is then used for all function declarations like this: 
+
+\begin{Verbatim}[frame=single]
+extern int functionname PARAMS((const char *parameter));
+\end{Verbatim}
+
+\item With the PARAMS macro is used for all function declarations, ANSI 
+compilers are given all the type information they require to do full compile 
+time type checking. The function definitions proper must then be declared 
+in K\&R style so that K\&R compilers don't choke ({\MfQ\cH123}\z{\MaQ\cH132}, {\MeQ\cH57}\z{\MaQ\cH82}) on ANSI syntax.
+There is a small amount of overhead in writing code this way, however: The ANSI compile time type checking can only work in conjunction ({\McQ\cH33}\z{\MaQ\cH175}; {\McQ\cH201}\z{\McQ\cH58}; {\McQ\cH169}\z{\MbQ\cH81})
+with K\&R function definitions if it first sees an ANSI function prototype.
+This forces you to develop the good habit of prototyping every single 
+function in your project. Even the static ones.
+
+\item The easiest way to work around the lack of void * pointers, is to define a new type that is conditionally set to void * for ANSI compilers, or char * for K\&R compilers. You should add the following to a common header file: 
+
+\begin{Verbatim}[frame=single]
+#if __STDC__
+typedef void *void_ptr;
+#else /* !__STDC__ */
+typedef char *void_ptr;
+#endif /* __STDC__ */
+\end{Verbatim}
+
+\item The difference between the two variadic
+function\marginpar{variadic function
+{\MaQ\cH223}\z{\MdQ\cH100}\z{\MbQ\cH117}\z{\MaQ\cH161}\z{\MbQ\cH98}\z{\MaQ\cH46}\z{\MeQ\cH9}\z{\MaQ\cH236}\z{\MbQ\cH237}\z{\MdQ\cH131}\z{\MbQ\cH31}} APIs pose ({\McQ\cH168}\z{\MbQ\cH65}, {\MeQ\cH249}\z{\McQ\cH150})
+a stickier ({\MlQ\cH234}\z{\MbQ\cH71}\z{\MbQ\cH237}, {\MkQ\cH44}\z{\MhQ\cH4}\z{\MbQ\cH237}) problem, and the solution is ugly. But it does work.
+First you must check for the headers in `configure.in': 
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_HEADERS(stdarg.h varargs.h, break)
+\end{Verbatim}
+
+Having done this, add the following code to a common header file: 
+
+\begin{Verbatim}[frame=single]
+#if HAVE_STDARG_H
+#  include <stdarg.h>
+#  define VA_START(a, f)        va_start(a, f)
+#else
+#  if HAVE_VARARGS_H
+#    include <varargs.h>
+#    define VA_START(a, f)      va_start(a)
+#  endif
+#endif
+#ifndef VA_START
+  error no variadic api
+#endif
+\end{Verbatim}
+
+You must now supply each variadic function with both a K\&R and an ANSI 
+definition, like this: 
+
+\begin{Verbatim}[frame=single]
+int
+#if HAVE_STDARG_H
+functionname (const char *format, ...)
+#else
+functionname (format, va_alist)
+     const char *format;
+     va_dcl
+#endif
+{
+  va_alist ap;
+  char *arg;
+
+  VA_START (ap, format);
+  ...
+  arg = va_arg (ap, char *);
+  ...
+  va_end (ap);
+
+  return arg : strlen (arg) ? 0;
+}
+\end{Verbatim}
+
+\end{enumerate}
+
+\section{A Simple Shell Builders Library}
+
+An application which most developers \underline{try their hand} ({\MdQ\cH254}\z{\McQ\cH116}) at
+\underline{sooner or later} ({\MjQ\cH98}\z{\MbQ\cH111}, {\MbQ\cH111}\z{\MbQ\cH119}) is 
+a Unix shell. There is a lot of functionality common to all traditional 
+command line shells, which I thought I would push into a portable 
+library to get you over the first hurdle ({\MjQ\cH190}\z{\MmQ\cH243}, {\MeQ\cH8}\z{\McQ\cH216}) when that 
+moment is upon you. Before elabourating ({\MmQ\cH109}\z{\McQ\cH145}\z{\McQ\cH75}\z{\MbQ\cH45}\z{\MbQ\cH237}, {\MjQ\cH58}\z{\MdQ\cH163}\z{\MbQ\cH237}) on any of this I 
+need to name the project. I've called it \textit{sic}, from the Latin 
+\textit{so it is}, because like all good project names it is somewhat 
+pretentious ({\McQ\cH65}\z{\McQ\cH138}\z{\MbQ\cH237}; {\McQ\cH65}\z{\MaQ\cH183}\z{\MaQ\cH46}\z{\MaQ\cH123}\z{\MbQ\cH237}; {\MhQ\cH35}\z{\MeQ\cH89}\z{\MbQ\cH237}) and it \underline{lends itself to}
+({\MjQ\cH95}\z{\MaQ\cH175}) the recursive acronym ({\McQ\cH237}\z{\MaQ\cH229}\z{\MgQ\cH130}\z{\MhQ\cH242}\z{\MhQ\cH73}\z{\MaQ\cH229}) sic is cumulative ({\MgQ\cH218}\z{\MaQ\cH211}\z{\MbQ\cH237}; {\MiQ\cH122}\z{\McQ\cH9}\z{\MbQ\cH237},
+{\MhQ\cH218}\z{\McQ\cH108}\z{\MbQ\cH237}; {\MhQ\cH218}\z{\McQ\cH108}\z{\McQ\cH27}\z{\MaQ\cH130}\z{\MbQ\cH237}). 
+
+The gory ({\MiQ\cH166}\z{\MgQ\cH139}\z{\MbQ\cH237}, {\MaQ\cH73}\z{\MaQ\cH65}\z{\MgQ\cH132}\z{\MkQ\cH12}\z{\MlQ\cH92}\z{\MbQ\cH205}\z{\MbQ\cH237}, {\MgQ\cH123}\z{\MoQ\cH117}\z{\MbQ\cH237}) detail of the minutae of the source 
+is beyond the scope of this book, but to convey ({\McQ\cH171}\z{\McQ\cH163}, {\MfQ\cH186}\z{\McQ\cH171}, {\McQ\cH158}\z{\McQ\cH171}) a feel 
+for the need for Sic, some of the goals which influenced ({\MfQ\cH9}\z{\McQ\cH224}, {\MaQ\cH84}\z{\MbQ\cH224})
+the design follow: 
+
+\begin{itemize}
+\item Sic must be very small so that, in addition to being used as the 
+basis for a \underline{full blown} ({\MaQ\cH234}\z{\MaQ\cH114}\z{\MbQ\cH65}\z{\MhQ\cH7}\z{\MbQ\cH237}; {\MaQ\cH107}\z{\MaQ\cH125}\z{\MbQ\cH234}\z{\MbQ\cH4}\z{\MbQ\cH237}; {\MaQ\cH120}\z{\MbQ\cH127}\z{\McQ\cH248}\z{\MaQ\cH126}\z{\MbQ\cH212}\z{\MfQ\cH23}\z{\MbQ\cH237})
+shell, it can be linked (unadorned ({\MbQ\cH132}\z{\McQ\cH37}\z{\McQ\cH95}\z{\MjQ\cH242}\z{\MbQ\cH237}; {\MaQ\cH159}\z{\MaQ\cH86}\z{\MbQ\cH237}; {\MgQ\cH98}\z{\MhQ\cH214}\z{\MbQ\cH237}) ) into an 
+application and used for trivial ({\MmQ\cH166}\z{\McQ\cH30}\z{\MbQ\cH237}; {\MaQ\cH46}\z{\McQ\cH189}\z{\McQ\cH98}\z{\MbQ\cH237}; {\MbQ\cH204}\z{\MaQ\cH103}\z{\MdQ\cH77}\z{\MbQ\cH237}) tasks,
+such as reading startup configuration. 
+
+\item It must not be tied to a particular syntax or set of reserved words.
+If you use it to read your startup configuration, I don't want to force 
+you to use my syntax and commands. 
+
+\item The boundary ({\MjQ\cH105}\z{\MbQ\cH228}, {\MaQ\cH125}\z{\MbQ\cH228}\z{\McQ\cH40}) between the library (`libsic') and the 
+application must be well defined. Sic will take strings of characters as input,
+and internally parse and evaluate them according to registered commands and 
+syntax, returning results or diagnostics ( ({\MbQ\cH224}\z{\MaQ\cH84}\z{\MaQ\cH192}\z{\MbQ\cH98}) {\MiQ\cH196}\z{\MbQ\cH105}\z{\MbQ\cH182}) as appropriate. 
+
+\item It must be extremely portable -- that is what I am trying to 
+illustrate here, after all. 
+\end{itemize}
+
+\subsection[Portability Infrastructure]{Portability Infrastructure
+({\MaQ\cH116}\z{\MaQ\cH117}\z{\MbQ\cH29}\z{\McQ\cH113} ({\MaQ\cH224}\z{\McQ\cH196}\z{\McQ\cH152}{\MaQ\cH2} {\MaQ\cH116}\z{\McQ\cH152}{\MaQ\cH2} {\MaQ\cH45}\z{\MbQ\cH174}\z{\McQ\cH173}\z{\McQ\cH16}), {\MeQ\cH33}\z{\MhQ\cH128}\z{\MbQ\cH29}\z{\McQ\cH113})}
+
+As I explained in \ref{pds} (page \pageref{pds}) Project Directory Structure,
+I'll first create the 
+project directories, a toplevel dirctory and a subdirectory to put the library 
+sources into. I want to install the library header files 
+to `/usr/local/include/sic', so the library subdirectory must be named 
+appropriately. See subsubsection \ref{chf} (page \pageref{chf}) C Header Files. 
+
+
+\begin{Verbatim}[frame=single]
+$ mkdir sic
+$ mkdir sic/sic
+$ cd sic/sic
+\end{Verbatim}
+
+I will describe the files I add in this section in more detail than the 
+project specific sources, because they comprise ({\MdQ\cH168}\z{\MdQ\cH214}, {\MdQ\cH168}\z{\MfQ\cH142}) an infrastructure 
+that I use relatively unchanged for all of my GNU Autotools projects. You 
+could keep an archive of these files, and use them as a starting point each 
+time you begin a new project of your own. 
+
+\subsubsection{Error Management}
+
+A good place to start with any project design is the error management facility. In Sic I will use a simple group of functions to display simple error messages. Here is `sic/error.h': 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_ERROR_H
+#define SIC_ERROR_H 1
+
+#include <sic/common.h>
+
+BEGIN_C_DECLS
+
+extern const char *program_name;
+extern void set_program_name (const char *argv0);
+
+extern void sic_warning      (const char *message);
+extern void sic_error        (const char *message);
+extern void sic_fatal        (const char *message);
+
+END_C_DECLS
+
+#endif /* !SIC_ERROR_H */
+\end{Verbatim}
+
+This header file follows the principles \underline{set out} ({\McQ\cH199}\z{\MaQ\cH225})
+in \ref{chf} C Header Files (page \pageref{chf}).
+
+
+I am storing the program\_{}name variable in the library that uses it, so that 
+I can be sure that the library will build on architectures that don't 
+allow undefined symbols in libraries\footnote{AIX and Windows being the main 
+culprits.}. 
+
+
+Keeping those preprocessor macro definitions designed to aid code portability 
+together (in a single file), is a good way to maintain the readability of 
+the rest of the code. For this project I will put that code in `common.h': 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_COMMON_H
+#define SIC_COMMON_H 1
+
+#if HAVE_CONFIG_H
+#  include <sic/config.h>
+#endif
+
+#include <stdio.h>
+#include <sys/types.h>
+
+#if STDC_HEADERS
+#  include <stdlib.h>
+#  include <string.h>
+#elif HAVE_STRINGS_H
+#  include <strings.h>
+#endif /*STDC_HEADERS*/
+
+#if HAVE_UNISTD_H
+#  include <unistd.h>
+#endif
+
+#if HAVE_ERRNO_H
+#  include <errno.h>
+#endif /*HAVE_ERRNO_H*/
+#ifndef errno
+/* Some systems #define this! */
+extern int errno;
+#endif
+
+#endif /* !SIC_COMMON_H */
+\end{Verbatim}
+
+You may recognise ({\McQ\cH119}\z{\MaQ\cH124}, {\McQ\cH133}\z{\MaQ\cH129}; {\McQ\cH119}\z{\McQ\cH133}) some snippets ({\MdQ\cH145}\z{\MfQ\cH165}\z{\MhQ\cH121}\z{\MbQ\cH210}; {\MbQ\cH105}\z{\MbQ\cH210}) of code 
+from the Autoconf manual here --- in particular the inclusion of the project 
+`config.h', which will be generated shortly. Notice that I have been careful 
+to conditionally include any headers which are not guaranteed ({\MbQ\cH46}\z{\MaQ\cH236}\z{\MbQ\cH237}, {\MiQ\cH39}\z{\MaQ\cH236}\z{\MbQ\cH237}) 
+to exist on every architecture. The \underline{rule of thumb}
+({\MaQ\cH245}\z{\MbQ\cH224}\z{\MbQ\cH106}\z{\MbQ\cH182}; {\MbQ\cH150}\z{\MgQ\cH191}\z{\MbQ\cH182}; {\McQ\cH26}\z{\MhQ\cH73}\z{\MbQ\cH237}\z{\MiQ\cH169}\z{\McQ\cH190}, {\MeQ\cH33}\z{\MbQ\cH133}\z{\MaQ\cH159}\z{\MaQ\cH134}; {\McQ\cH37}\z{\McQ\cH240}\z{\MbQ\cH182}\z{\MaQ\cH134}; {\McQ\cH87}\z{\MaQ\cH57}\z{\MbQ\cH182}\z{\MaQ\cH134}) here is that 
+only `stdio.h' is ubiquitous ({\MaQ\cH131}\z{\McQ\cH84}\z{\MaQ\cH230}\z{\MaQ\cH202}\z{\MbQ\cH237}, {\MgQ\cH0}\z{\MjQ\cH90}\z{\MaQ\cH230}\z{\MaQ\cH202}\z{\MbQ\cH237}) (though I have never 
+heard of a machine that has no `sys/types.h'). You can find more details of 
+some of these in section `Existing Tests' in \textit{The GNU Autoconf Manual}. 
+
+
+Here is a little more code from `common.h': 
+
+\begin{Verbatim}[frame=single]
+#ifndef EXIT_SUCCESS
+#  define EXIT_SUCCESS  0
+#  define EXIT_FAILURE  1
+#endif
+\end{Verbatim}
+
+The implementation of the error handling functions goes in `error.c' and is 
+very straightforward ({\MbQ\cH112}\z{\MbQ\cH252}\z{\MbQ\cH237}, {\MiQ\cH39}\z{\MaQ\cH236}\z{\MbQ\cH237}) : 
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <sic/config.h>
+#endif
+
+#include "common.h"
+#include "error.h"
+
+static void error (int exit_status, const char *mode, 
+                   const char *message);
+
+static void
+error (int exit_status, const char *mode, const char *message)
+{
+ fprintf (stderr,"%s: %s: %s.\n",program_name,mode, message);
+
+ if (exit_status >= 0)
+  exit (exit_status);
+}
+
+void sic_warning (const char *message)
+{
+ error (-1, "warning", message);
+}
+
+void sic_error (const char *message)
+{
+ error (-1, "ERROR", message);
+}
+
+void sic_fatal (const char *message)
+{
+ error (EXIT_FAILURE, "FATAL", message);
+}
+\end{Verbatim}
+
+I also need a definition of program\_{}name; set\_{}program\_{}name 
+copies the filename component of path into the exported data, program\_{}name.
+The xstrdup function just calls strdup, but aborts if there is not enough 
+memory to make the copy: 
+
+\begin{Verbatim}[frame=single]
+const char *program_name = NULL;
+
+void set_program_name (const char *path)
+{
+ if (!program_name)
+  program_name = xstrdup (basename (path));
+}
+\end{Verbatim}
+
+\subsubsection{Memory Management}\label{mm}
+
+A useful idiom common to many GNU projects is to wrap the memory management 
+functions to localise \textit{out of memory handling}, naming them with 
+an `x' prefix. By doing this, the rest of the project is relieved ({\MbQ\cH97}\z{\MbQ\cH200}; {\MbQ\cH97}\z{\MfQ\cH182};
+{\McQ\cH106}\z{\MeQ\cH12}) of having to remember to check for `NULL' returns from the various 
+memory functions. These wrappers use the error API to report memory 
+exhaustion ({\MiQ\cH23}\z{\MhQ\cH96}; {\MgQ\cH44}\z{\MhQ\cH170}; {\McQ\cH23}\z{\MhQ\cH81}\z{\MaQ\cH137}\z{\MhQ\cH170}) and abort the program. I have placed the 
+implementation code in `xmalloc.c': 
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <sic/config.h>
+#endif
+
+#include "common.h"
+#include "error.h"
+
+void * xmalloc (size_t num)
+{
+ void *new = malloc (num);
+ if (!new)
+  sic_fatal ("Memory exhausted");
+ return new;
+}
+
+void * xrealloc (void *p, size_t num)
+{
+ void *new;
+
+ if (!p)
+  return xmalloc (num);
+
+ new = realloc (p, num);
+ if (!new)
+  sic_fatal ("Memory exhausted");
+
+ return new;
+}
+
+void * xcalloc (size_t num, size_t size)
+{
+ void *new = xmalloc (num * size);
+ bzero (new, num * size);
+ return new;
+}
+\end{Verbatim}
+
+Notice in the code above, that xcalloc is implemented in terms of xmalloc,
+since calloc itself is not available in some older C libraries. Also, the 
+bzero function is actually deprecated ({\McQ\cH59}\z{\MbQ\cH112}\z{\MaQ\cH46}\z{\MjQ\cH14}\z{\MbQ\cH65}; {\MaQ\cH165}\z{\MaQ\cH250}; {\MjQ\cH47}\z{\McQ\cH101}) 
+\underline{in favour of} ({\MjQ\cH14}\z{\MbQ\cH65}...; {\MbQ\cH88}\z{\MbQ\cH77}...; {\MbQ\cH127}\z{\MaQ\cH130}\z{\MbQ\cH107}...) memset in modern C 
+libraries -- I'll explain how to take this into account later in 
+\ref{boac} Beginnings of a `configure.in' (page \pageref{boac}). 
+
+
+Rather than create a separate `xmalloc.h' file, which would need to 
+be \#included from almost everywhere else, the logical place to declare 
+these functions is in `common.h', since the wrappers will be called 
+from most everywhere else in the code: 
+
+\begin{Verbatim}[frame=single]
+#ifdef __cplusplus
+#  define BEGIN_C_DECLS         extern "C" {
+#  define END_C_DECLS           }
+#else
+#  define BEGIN_C_DECLS
+#  define END_C_DECLS
+#endif
+
+#define XCALLOC(type, num)                                  \
+        ((type *) xcalloc ((num), sizeof(type)))
+#define XMALLOC(type, num)                                  \
+        ((type *) xmalloc ((num) * sizeof(type)))
+#define XREALLOC(type, p, num)                              \
+        ((type *) xrealloc ((p), (num) * sizeof(type)))
+#define XFREE(stale)                      do {              \
+              if (stale) { free (stale);  stale = 0; }      \
+                                          } while (0)
+
+BEGIN_C_DECLS
+
+extern void *xcalloc    (size_t num, size_t size);
+extern void *xmalloc    (size_t num);
+extern void *xrealloc   (void *p, size_t num);
+extern char *xstrdup    (const char *string);
+extern char *xstrerror  (int errnum);
+
+END_C_DECLS
+\end{Verbatim}
+By using the macros defined here, allocating and freeing heap memory is reduced from: 
+\begin{Verbatim}[frame=single]
+char **argv = (char **) xmalloc (sizeof (char *) * 3);
+do_stuff (argv);
+if (argv)
+  free (argv);
+\end{Verbatim}
+
+to the simpler and more readable: 
+\begin{Verbatim}[frame=single]
+char **argv = XMALLOC (char *, 3);
+do_stuff (argv);
+XFREE (argv);
+\end{Verbatim}
+In the same spirit ({\McQ\cH23}\z{\MbQ\cH255}, {\MbQ\cH45}\z{\MjQ\cH209}) , I have borrowed ({\MaQ\cH97}\z{\MbQ\cH224}; {\MbQ\cH83}\z{\MbQ\cH224}) `xstrdup.c' 
+and `xstrerror.c' from project GNU's libiberty. See subusbsection \ref{ffi}
+Fallback Function Implementations (page \pageref{ffi}). 
+
+\subsubsection{Generalised List Data Type}
+
+In many C programs you will see various implementations and re-implementations 
+of lists and stacks, each tied to its own particular project. It is 
+surprisingly simple to write a catch-all implementation, as I have done here 
+with a generalised list operation API in `list.h': 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_LIST_H
+#define SIC_LIST_H 1
+
+#include <sic/common.h>
+
+BEGIN_C_DECLS
+
+typedef struct list 
+{
+ struct list *next;    /* chain forward pointer*/
+ void *userdata;       /* incase you want to use raw Lists */
+} List;
+
+extern List *list_new       (void *userdata);
+extern List *list_cons      (List *head, List *tail);
+extern List *list_tail      (List *head);
+extern size_t list_length   (List *head);
+
+END_C_DECLS
+
+#endif /* !SIC_LIST_H */
+\end{Verbatim}
+
+The trick is to ensure that any structures you want to chain together have 
+their forward pointer in the first field. Having done that, the generic 
+functions declared above can be used to manipulate any such chain by casting 
+it to List * and back again as necessary. 
+
+For example: 
+
+\begin{Verbatim}
+ struct foo 
+ {
+  struct foo *next;
+
+  char *bar;
+  struct baz *qux;
+  ...
+ };
+
+ ...
+  struct foo *foo_list = NULL;
+
+  foo_list = (struct foo *) list_cons ((List *) new_foo (),
+                                       (List *) foo_list);
+ ...
+\end{Verbatim}
+
+The implementation of the list manipulation functions is in `list.c': 
+
+\begin{Verbatim}[frame=single]
+#include "list.h"
+
+List * list_new (void *userdata)
+{
+ List *new = XMALLOC (List, 1);
+
+ new->next = NULL;
+ new->userdata = userdata;
+
+ return new;
+}
+
+List * list_cons (List *head, List *tail)
+{
+ head->next = tail;
+ return head;
+}
+
+List * list_tail (List *head)
+{
+ return head->next;
+}
+
+size_t list_length (List *head)
+{
+ size_t n;
+  
+ for (n = 0; head; ++n)
+  head = head->next;
+
+ return n;
+}
+\end{Verbatim}
+
+\subsection{Library Implementation}
+
+
+In order to \underline{set the stage for} ({\MbQ\cH209}... {\MaQ\cH84}\z{\MaQ\cH223}\z{\MbQ\cH196}\z{\MaQ\cH101}) later chapter which 
+expand upon this example, in this subsection I will describe the purpose of 
+the sources that combine to implement the shell library. I will not 
+dissect ({\MdQ\cH29}\z{\McQ\cH30}\z{\MaQ\cH125}\z{\MgQ\cH38}; {\McQ\cH30}\z{\MbQ\cH45}\z{\MbQ\cH251}\z{\McQ\cH10}) the code introduced here -- you can download the 
+sources from the book's webpages at http://sources.redhat.com/autobook/. 
+
+
+The remaining sources for the library, beyond the support files described in the previous subsection, are divided into four pairs of files: 
+
+\subsubsection{`sic.c' \& `sic.h'}
+
+Here are the functions for creating and managing sic parsers. 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_SIC_H
+#define SIC_SIC_H 1
+
+#include <sic/common.h>
+#include <sic/error.h>
+#include <sic/list.h>
+#include <sic/syntax.h>
+
+typedef struct sic 
+{
+ char *result;         /* result string */
+ size_t len;           /* bytes used by result field */
+ size_t lim;           /* bytes allocated to result field */
+ /* tables of builtin functions */
+ struct builtintab *builtins;
+ /* dispatch table for syntax of input */
+ SyntaxTable **syntax;
+ List *syntax_init;  /* stack of syntax state initialisers */
+ List *syntax_finish;/* stack of syntax state finalizers */
+ SicState *state;    /* state data from syntax extensions */
+} Sic;
+
+#endif /* !SIC_SIC_H */
+\end{Verbatim}
+
+This structure has fields to store registered command (builtins) and 
+syntax (syntax) handlers, along with other state information (state) that can 
+be used to share information between various handlers, and some room to build 
+a result or error string (result). 
+
+\subsubsection{`builtin.c' \& `builtin.h'}
+
+Here are the functions for managing tables of builtin commands in each Sic structure: 
+\begin{Verbatim}[frame=single]
+typedef int (*builtin_handler) (Sic *sic,
+                                int argc, char *const argv[]);
+
+typedef struct 
+{
+ const char *name;
+ builtin_handler func;
+ int min, max;
+} Builtin;
+
+typedef struct builtintab BuiltinTab;
+
+extern Builtin *builtin_find (Sic *sic, const char *name);
+extern int builtin_install   (Sic *sic, Builtin *table);
+extern int builtin_remove    (Sic *sic, Builtin *table);
+\end{Verbatim}
+
+\subsubsection{`eval.c' \& `eval.h'}
+
+
+Having created a Sic parser, and populated ({\MbQ\cH2}\z{\MaQ\cH82}\z{\MbQ\cH107}) it with some Builtin 
+handlers, a user of this library must tokenize and evaluate its input stream.
+These files define a structure for storing tokenized strings (Tokens), and 
+functions for converting char * strings both to and from this structure type: 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_EVAL_H
+#define SIC_EVAL_H 1
+
+#include <sic/common.h>
+#include <sic/sic.h>
+
+BEGIN_C_DECLS
+
+typedef struct 
+{
+ int  argc;            /* number of elements in ARGV */
+ char **argv;          /* array of pointers to elements */
+ size_t lim;           /* number of bytes allocated */
+} Tokens;
+
+extern int eval       (Sic *sic, Tokens *tokens);
+
+extern int 
+untokenize (Sic *sic, char **pcommand, Tokens *tokens);
+
+extern int 
+tokenize (Sic *sic, Tokens **ptokens, char **pcommand);
+
+END_C_DECLS
+
+#endif /* !SIC_EVAL_H */
+\end{Verbatim}
+
+These files also define the eval function, which examines a Tokens structure 
+in the context of the given Sic parser, dispatching the argv array to a 
+relevant Builtin handler, also written by the library user. 
+
+\subsubsection{`syntax.c' \& `syntax.h'}
+
+
+When tokenize splits a char * string into parts, by default it breaks the 
+string into words delimited by whitespace. These files define the interface 
+for changing this default behaviour, by registering callback functions which 
+the parser will run when it meets an `interesting' symbol in the input stream.
+Here are the declarations from `syntax.h': 
+
+\begin{Verbatim}[frame=single]
+BEGIN_C_DECLS
+
+typedef int SyntaxHandler (struct sic *sic, BufferIn *in,
+                           BufferOut *out);
+
+typedef struct syntax 
+{
+ SyntaxHandler *handler;
+ char *ch;
+}Syntax;
+
+extern int syntax_install(struct sic *sic, Syntax *table);
+extern SyntaxHandler *syntax_handler(struct sic *sic, int ch);
+
+END_C_DECLS
+\end{Verbatim}
+
+A SyntaxHandler is a function called by tokenize as it consumes its input to 
+create a Tokens structure; the two functions associate a table of such handlers
+with a given Sic parser, and find the particular handler for a given character 
+in that Sic parser, respectively. 
+
+\subsection{Beginnings of a `configure.in'}\label{boac}
+Now that I have some code, I can run \textbf{autoscan} to generate a 
+preliminary ({\MaQ\cH128}\z{\MbQ\cH165}; {\McQ\cH199}\z{\MhQ\cH171}; {\McQ\cH227}\z{\MaQ\cH101}) `configure.in'. autoscan will examine all of 
+the sources in the current directory tree looking for common points of 
+non-portability, adding macros suitable for detecting the discovered problems.
+\textbf{autoscan} generates the following in `\textbf{configure.scan}': 
+
+\begin{Verbatim}[frame=single]
+# Process this file with autoconf to 
+# produce a configure script.
+AC_INIT(sic/eval.h)
+
+# Checks for programs.
+
+# Checks for libraries.
+
+# Checks for header files.
+AC_HEADER_STDC
+AC_CHECK_HEADERS(strings.h unistd.h)
+
+#Checks for typedefs,structures,and compiler characteristics.
+AC_C_CONST
+AC_TYPE_SIZE_T
+
+# Checks for library functions.
+AC_FUNC_VPRINTF
+AC_CHECK_FUNCS(strerror)
+
+AC_OUTPUT()
+\end{Verbatim}
+
+Since the generated `configure.scan' does not overwrite your 
+project's `configure.in', it is a good idea to run autoscan 
+periodically ({\MaQ\cH236}\z{\MbQ\cH130}\z{\MaQ\cH203}; {\MdQ\cH88}\z{\MhQ\cH21}) even in established project source trees, and 
+compare the two files. Sometimes autoscan will find some portability issue 
+you have overlooked ({\MbQ\cH245}\z{\MgQ\cH213}; {\MfQ\cH31}\z{\MhQ\cH73}) , or weren't aware of. 
+
+Looking through the documentation for the macros in this `configure.scan',
+AC\_{}C\_{}CONST and AC\_{}TYPE\_{}SIZE\_{}T will \underline{take care of}
+({\MbQ\cH206}\z{\MjQ\cH232}, {\McQ\cH84}\z{\MbQ\cH220}) themselves (provided ({\MaQ\cH74}... {\MbQ\cH209}\z{\MbQ\cH145}\z{\MaQ\cH75}; {\MaQ\cH99}\z{\MaQ\cH224}) I ensure ({\MaQ\cH92}\z{\McQ\cH132}) 
+that `config.h' is included into every source file),
+and AC\_{}HEADER\_{}STDC and AC\_{}CHECK\_{}HEADERS (unistd.h) are already 
+taken care of in `common.h'. 
+
+autoscan is no silver bullet! Even here in this simple example, I need to 
+manually add macros to check for the presence ({\MaQ\cH230}\z{\MaQ\cH202}) of `errno.h': 
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_HEADERS(errno.h strings.h unistd.h)
+\end{Verbatim}
+
+I also need to manually add the Autoconf macro for generating `config.h'; a 
+macro to initialise automake support; and a macro to check for the presence 
+of ranlib. These should go \underline{close to} ({\MbQ\cH81}\z{\McQ\cH161}\z{\MbQ\cH107}, {\MaQ\cH202}\z{\McQ\cH203}\z{\McQ\cH161}) the 
+start of `configure.in': 
+
+\begin{Verbatim}[frame=single]
+...
+AC_CONFIG_HEADER(config.h)
+AM_INIT_AUTOMAKE(sic, 0.5)
+
+AC_PROG_CC
+AC_PROG_RANLIB
+...
+\end{Verbatim}
+
+Recall that the use of bzero 
+in \ref{mm} \textbf{Memory Management} (page \pageref{mm}) is 
+not entirely portable. The trick is to provide a bzero work-alike, depending on which functions Autoconf detects, by adding the following towards the end of `configure.in':
+
+\begin{Verbatim}[frame=single]
+...
+AC_CHECK_FUNCS(bzero memset, break)
+...
+\end{Verbatim}
+
+With the addition of this small snippet ({\MbQ\cH105}\z{\MbQ\cH210}) of code to `common.h', I can 
+now \underline{make use of} ({\MaQ\cH130}\z{\MbQ\cH224}) bzero even when linking with a C library 
+that has no implementation of its own: 
+
+\begin{Verbatim}[frame=single]
+#if !HAVE_BZERO && HAVE_MEMSET
+# define bzero(buf, bytes)  ((void) memset (buf, 0, bytes))
+#endif
+\end{Verbatim}
+
+An interesting macro suggested by autoscan is AC\_{}CHECK\_{}FUNCS(strerror).
+This tells me that I need to provide a replacement implementation of 
+strerror for the benefit of architectures which don't have it in their 
+system libraries. This is resolved by providing a file with a fallback 
+implementation for the named function, and creating a library from it and 
+any others that `configure' discovers to be lacking from the 
+system library on the target host. 
+
+
+You will recall that `configure' is the shell script the end user of this 
+package will run on their machine to test that it has all the features 
+the package wants to use. The library that is created will allow the rest 
+of the project to be written in the knowledge that any functions required 
+by the project but missing from the installers system libraries will be 
+available nonetheless ({\MaQ\cH79}\z{\MbQ\cH117}; {\MaQ\cH69}\z{\MbQ\cH205}) . GNU `libiberty' comes to the 
+rescue again -- it already has an implementation of `strerror.c' that I 
+was able to use with a little modification. 
+
+
+Being able to supply a simple implementation of strerror, as the `strerror.c' 
+file from `libiberty' does, relies on there being a well 
+defined sys\_{}errlist variable. It is a fair bet that if the target host 
+has no strerror implementation, however, that the system sys\_{}errlist will 
+be broken or missing. I need to write a configure macro to check whether 
+the system defines sys\_{}errlist, and tailor ({\MaQ\cH94}\z{\MbQ\cH90}; {\MaQ\cH85}\z{\MaQ\cH175}\z{\MjQ\cH95}) the code 
+in `strerror.c' to use this knowledge. 
+
+
+To avoid clutter ({\MdQ\cH126}\z{\MdQ\cH18}) in the top-level directory, I am a great believer in 
+keeping as many of the configuration files as possible in their own 
+sub-directory. First of all, I will create a new directory called `config' 
+inside the top-level directory, and put `sys\_{}errlist.m4' inside it: 
+
+\begin{Verbatim}[frame=single]
+AC_DEFUN(SIC_VAR_SYS_ERRLIST,
+[AC_CACHE_CHECK([for sys_errlist],
+sic_cv_var_sys_errlist,
+[AC_TRY_LINK([int *p;],
+  [extern int sys_errlist; p = &sys_errlist;],
+  sic_cv_var_sys_errlist=yes, sic_cv_var_sys_errlist=no)])
+if test x"$sic_cv_var_sys_errlist" = xyes; then
+ AC_DEFINE(HAVE_SYS_ERRLIST, 1,
+  [Define if your system libraries have a \
+   sys_errlist variable.])
+fi])
+\end{Verbatim}
+
+I must then add a call to this new macro in the `configure.in' file being careful to put it in the right place -- somwhere between typedefs and structures and library functions according to the comments in `configure.scan': 
+
+\begin{Verbatim}[frame=single]
+SIC_VAR_SYS_ERRLIST
+\end{Verbatim}
+
+GNU Autotools can also be set to store most of their files in a subdirectory,
+by calling the AC\_{}CONFIG\_{}AUX\_{}DIR macro near the top 
+of `configure.in', preferably ({\MbQ\cH121}\z{\MaQ\cH170}\z{\MaQ\cH166}\z{\MaQ\cH203}; {\MbQ\cH121}\z{\MaQ\cH223}\z{\MaQ\cH203}; {\MeQ\cH158}\z{\MaQ\cH170}) right after AC\_{}INIT: 
+
+\begin{Verbatim}[frame=single]
+AC_INIT(sic/eval.c)
+AC_CONFIG_AUX_DIR(config)
+AM_CONFIG_HEADER(config.h)
+...
+\end{Verbatim}
+
+Having made this change, many of the files added by running autoconf and 
+automake \verb+--add-missing+ will be put in the aux\_{}dir. 
+
+The source tree now looks like this: 
+
+\begin{Verbatim}[frame=single]
+sic/
+  +-- configure.scan
+  +-- config/
+  |     +-- sys_errlist.m4
+  +-- replace/
+  |     +-- strerror.c
+  +-- sic/
+        +-- builtin.c
+        +-- builtin.h
+        +-- common.h
+        +-- error.c
+        +-- error.h
+        +-- eval.c
+        +-- eval.h
+        +-- list.c
+        +-- list.h
+        +-- sic.c
+        +-- sic.h
+        +-- syntax.c
+        +-- syntax.h
+        +-- xmalloc.c
+        +-- xstrdup.c
+        +-- xstrerror.c
+\end{Verbatim}
+
+In order to correctly utilise the fallback implementation,
+AC\_{}CHECK\_{}FUNCS (strerror) needs to be removed and strerror added 
+to AC\_{}REPLACE\_{}FUNCS: 
+
+\begin{Verbatim}[frame=single]
+# Checks for library functions.
+AC_REPLACE_FUNCS(strerror)
+\end{Verbatim}
+
+This will be clearer if you look at the `Makefile.am' for the `replace' 
+subdirectory: 
+
+\begin{Verbatim}[frame=single]
+## Makefile.am -- Process this file with automake
+#   to produce Makefile.in
+
+INCLUDES                =  -I$(top_builddir) -I$(top_srcdir)
+
+noinst_LIBRARIES        = libreplace.a
+libreplace_a_SOURCES        = 
+libreplace_a_LIBADD        = @LIBOBJS@
+\end{Verbatim}
+
+The code tells automake that I want to build a library for use within the 
+build tree (i.e. not installed -- `noinst'), and that has no source files 
+by default. The clever ({\MjQ\cH209}\z{\MeQ\cH205}\z{\MbQ\cH237}) part here is that when someone comes to 
+install Sic, they will run configure which will test for strerror, and 
+add `strerror.o' to LIBOBJS if the target host environment is missing its 
+own implementation. Now, when `configure' creates `replace/Makefile' (as I 
+asked it to with AC\_{}OUTPUT), `@LIBOBJS@' is replaced by the list of objects 
+required on the installer's machine. 
+
+Having done all this at configure time, when my user runs make, the files 
+required to replace functions missing from their target machine will be added 
+to `libreplace.a'. 
+
+Unfortunately this is not quite enough to start building the project. First 
+I need to add a top-level `Makefile.am' from which to ultimately ({\MbQ\cH124}\z{\MbQ\cH40}; {\McQ\cH31}\z{\MbQ\cH148}\z{\MaQ\cH203})
+create a top-level `Makefile' that will descend into the various 
+subdirectories of the project: 
+
+\begin{Verbatim}[frame=single]
+## Makefile.am -- Process this file with automake to 
+#   produce Makefile.in
+
+SUBDIRS = replace sic
+\end{Verbatim}
+
+ And `configure.in' must be told where it can find instances of Makefile.in: 
+
+\begin{Verbatim}[frame=single]
+AC_OUTPUT(Makefile replace/Makefile sic/Makefile)
+\end{Verbatim}
+
+I have written a bootstrap script for Sic, for details 
+see \ref{C_Bootstrapping} Bootstrapping (page \pageref{C_Bootstrapping}):
+
+\begin{Verbatim}[frame=single]
+#! /bin/sh
+
+set -x
+aclocal -I config
+autoheader
+automake --foreign --add-missing --copy
+autoconf
+\end{Verbatim}
+
+The `\verb+--foreign+' option to automake tells it to relax ({\MbQ\cH91}\z{\MkQ\cH13}) the GNU 
+standards for various files that should be present in a GNU distribution.
+Using this option saves me from havng to create empty files as we did 
+in \ref{C_amgap} A Minimal GNU Autotools Project (page \pageref{C_amgap}). 
+
+
+Right. Let's build the library! First, I'll run bootstrap: 
+\begin{Verbatim}[frame=single]
+$ ./bootstrap
++ aclocal -I config
++ autoheader
++ automake --foreign --add-missing --copy
+automake: configure.in: installing config/install-sh
+automake: configure.in: installing config/mkinstalldirs
+automake: configure.in: installing config/missing
++ autoconf
+\end{Verbatim}
+
+The project is now in the same state that an end-user would see, having 
+unpacked a distribution tarball. What follows is what an end user might 
+expect to see when building from that tarball: 
+
+\begin{Verbatim}[frame=single]
+$ ./configure
+creating cache ./config.cache
+checking for a BSD compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking whether make sets ${MAKE}... yes
+checking for working aclocal... found
+checking for working autoconf... found
+checking for working automake... found
+checking for working autoheader... found
+checking for working makeinfo... found
+checking for gcc... gcc
+checking whether the C compiler (gcc  ) works... yes
+checking whether the C compiler (gcc  ) is a \
+ cross-compiler... no
+checking whether we are using GNU C... yes
+checking whether gcc accepts -g... yes
+checking for ranlib... ranlib
+checking how to run the C preprocessor... gcc -E
+checking for ANSI C header files... yes
+checking for unistd.h... yes
+checking for errno.h... yes
+checking for string.h... yes
+checking for working const... yes
+checking for size_t... yes
+checking for strerror... yes
+updating cache ./config.cache
+creating ./config.status
+creating Makefile
+creating replace/Makefile
+creating sic/Makefile
+creating config.h
+\end{Verbatim}
+
+Compare this output with the contents of `configure.in', and notice how each 
+macro is ultimately responsible ({\McQ\cH219}\z{\McQ\cH138}\z{\McQ\cH141}\z{\MaQ\cH76}\z{\MbQ\cH237}) for one or more 
+consecutive ({\McQ\cH169}\z{\McQ\cH47}\z{\MaQ\cH46}\z{\MbQ\cH105}\z{\MbQ\cH237}) tests (via the Bourne shell code generated 
+in `configure'). Now that the `Makefile's have been successfully created,
+it is safe to call make to perform the actual compilation: 
+
+\begin{Verbatim}[frame=single]
+$ make
+make  all-recursive
+make[1]: Entering directory `/tmp/sic'
+Making all in replace
+make[2]: Entering directory `/tmp/sic/replace'
+rm -f libreplace.a
+ar cru libreplace.a
+ranlib libreplace.a
+make[2]: Leaving directory `/tmp/sic/replace'
+Making all in sic
+make[2]: Entering directory `/tmp/sic/sic'
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c builtin.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c error.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c eval.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c list.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c sic.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c syntax.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c xmalloc.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c xstrdup.c
+gcc -DHAVE_CONFIG_H -I. -I. -I.. -I..    -g -O2 -c xstrerror.c
+rm -f libsic.a
+ar cru libsic.a builtin.o error.o eval.o list.o sic.o \
+   syntax.o xmalloc.o xstrdup.o xstrerror.o ranlib libsic.a
+make[2]: Leaving directory `/tmp/sic/sic'
+make[1]: Leaving directory `/tmp/sic'
+\end{Verbatim}
+
+On this machine, as you can see from the output of configure above, I have 
+no need of the fallback implementation of strerror, so `libreplace.a' is empty.
+On another machine this might not be the case. In any event, I now have a 
+compiled `libsic.a' -- so far, so good. 
+
+\section{A Sample Shell Application}
+
+What I need now, is a program that uses `libsic.a', if only to give me 
+confidence that it is working. In this section, I will write a simple 
+shell which uses the library. But first, I'll create a directory to put it in:
+
+\begin{Verbatim}[frame=single]
+$ mkdir src
+$ ls -F
+COPYING  Makefile.am  aclocal.m4  configure*    config/   sic/
+INSTALL  Makefile.in  bootstrap*  configure.in  replace/  src/
+$ cd src
+\end{Verbatim}
+
+In order to put this shell together, we need to provide just a few 
+things for integration with `libsic.a'... 
+
+\subsection{`sic\_{}repl.c'}
+
+
+In `sic\_{}repl.c'\footnote{Read Eval Print Loop.} there is a loop for reading 
+strings typed by the user, evaluating them and printing the results. GNU readline is ideally suited to this, but it is not always available -- or sometimes people simply may not wish to use it. 
+
+
+With the help of GNU Autotools, it is very easy to cater ({\MjQ\cH67}\z{\MaQ\cH175}) for 
+building with and without GNU readline. `sic\_{}repl.c' uses this function 
+to read lines of input from the user: 
+
+\begin{Verbatim}[frame=single]
+static char * getline (FILE *in, const char *prompt)
+{
+ /* Always allocated and freed from inside this function.  */
+ static char *buf = NULL; 
+                           
+ XFREE (buf);
+
+ buf = (char *) readline ((char *) prompt);
+
+ #ifdef HAVE_ADD_HISTORY
+  if (buf && *buf)
+   add_history (buf);
+ #endif
+  
+ return buf;
+}
+\end{Verbatim}
+
+To make this work, I must write an Autoconf macro which adds an option 
+to `configure', so that when the package is installed, it will use the 
+readline library if `\verb+--with-readline+' is used: 
+
+\begin{Verbatim}[frame=single]
+AC_DEFUN(SIC_WITH_READLINE,
+[AC_ARG_WITH(readline,
+[ --with-readline  compile with the system readline library],
+[if test x"${withval-no}" != xno; then
+  sic_save_LIBS=$LIBS
+  AC_CHECK_LIB(readline, readline)
+  if test x"${ac_cv_lib_readline_readline}" = xno; then
+    AC_MSG_ERROR(libreadline not found)
+  fi
+  LIBS=$sic_save_LIBS
+fi])
+AM_CONDITIONAL(WITH_READLINE,test x"${with_readline-no}"!=xno)
+])
+\end{Verbatim}
+
+Having put this macro in the file `config/readline.m4', I must also call the new macro (SIC\_{}WITH\_{}READLINE) from `configure.in'. 
+
+\subsection{`sic\_{}syntax.c'}
+
+
+The syntax of the commands in the shell I am writing is defined by a set of 
+syntax handlers which are loaded into `libsic' at startup. I can get the C 
+preprocessor to do most of the repetitive ({\McQ\cH189}\z{\MiQ\cH181}\z{\MbQ\cH237}) code for me, and just fill 
+in the function bodies: 
+
+\begin{Verbatim}[frame=single]
+#if HAVE_CONFIG_H
+#  include <sic/config.h>
+#endif
+
+#include "sic.h"
+
+/* List of builtin syntax. */
+#define syntax_functions                \
+        SYNTAX(escape,  "\\")           \
+        SYNTAX(space,   " \f\n\r\t\v")  \
+        SYNTAX(comment, "#")            \
+        SYNTAX(string,  "\"")           \
+        SYNTAX(endcmd,  ";")            \
+        SYNTAX(endstr,  "")
+
+/* Prototype Generator. */
+#define SIC_SYNTAX(name)                \
+        int name (Sic *sic, BufferIn *in, BufferOut *out)
+
+#define SYNTAX(name, string)            \
+        extern SIC_SYNTAX (CONC (syntax_, name));
+syntax_functions
+#undef SYNTAX
+
+/* Syntax handler mappings. */
+Syntax syntax_table[] = {
+
+#define SYNTAX(name, string)            \
+        { CONC (syntax_, name), string },
+  syntax_functions
+#undef SYNTAX
+  
+  { NULL, NULL }
+};
+\end{Verbatim}
+
+This code writes the prototypes for the syntax handler functions, and creates 
+a table which associates each with one or more characters that might occur in 
+the input stream. The advantage of writing the code this way is that when I 
+want to add a new syntax handler later, it is a simple matter of adding a new 
+row to the syntax\_{}functions macro, and writing the function itself. 
+
+\subsection{`sic\_{}builtin.c'}
+
+
+In addition to the syntax handlers I have just added to the Sic shell, the 
+language of this shell is also defined by the builtin commands it provides.
+The infrastructure for this file is built from a table of functions which is 
+fed ({\MuQ\cH3}) into various C preprocessor macros, just as I did for the syntax 
+handlers. 
+
+
+One builtin handler function has special status, builtin\_{}unknown.
+This is the builtin that is called, if the Sic library cannot find a 
+suitable builtin function to handle the current input command. At first this 
+doesn't sound especially important -- but it is the key to any shell 
+implementation. When there is no builtin handler for the command, the shell 
+will search the users command path, `\$PATH', to find a suitable executable.
+And this is the job of builtin\_{}unknown: 
+
+\begin{Verbatim}[frame=single]
+int builtin_unknown (Sic *sic, int argc, char *const argv[])
+{
+  char *path = path_find (argv[0]);
+  int status = SIC_ERROR;
+
+  if (!path)
+    {
+      sic_result_append (sic, "command \"");
+      sic_result_append (sic, argv[0]);
+      sic_result_append (sic, "\" not found");
+    }
+  else if (path_execute (sic, path, argv) != SIC_OKAY)
+    {
+      sic_result_append (sic, "command \"");
+      sic_result_append (sic, argv[0]);
+      sic_result_append (sic, "\" failed: ");
+      sic_result_append (sic, strerror (errno));
+    }
+  else
+    status = SIC_OKAY;
+
+  return status;
+}
+
+static char *path_find (const char *command)
+{
+ char *path = xstrdup (command);
+  
+ if (*command == '/')
+ {
+  if (access (command, X_OK) < 0)
+   goto notfound;
+ }
+ else
+ {
+  char *PATH = getenv ("PATH");
+  char *pbeg, *pend;
+  size_t len;
+
+  for (pbeg = PATH; *pbeg != '\0'; pbeg = pend)
+  {
+   pbeg += strspn (pbeg, ":");
+   len = strcspn (pbeg, ":");
+   pend = pbeg + len;
+   path = XREALLOC (char, path, 2 + len + strlen(command));
+   *path = '\0';
+   strncat (path, pbeg, len);
+   if (path[len -1] != '/') strcat (path, "/");
+    strcat (path, command);
+          
+   if (access (path, X_OK) == 0)
+    break;
+  }
+
+  if (*pbeg == '\0')
+   goto notfound;
+ }
+
+ return path;
+
+ notfound:
+  XFREE (path);
+  return NULL;
+}  
+\end{Verbatim}
+
+Running `autoscan' again at this point adds AC\_{}CHECK\_{}FUNCS (strcspn
+strspn) to `configure.scan'. This tells me that these functions are not 
+truly portable. As before I provide fallback implementations for these 
+functions incase ({\MeQ\cH12}\z{\MaQ\cH82}) they are missing from the target host -- and as it 
+turns out, they are easy to write: 
+
+\begin{Verbatim}[frame=single]
+/* strcspn.c -- implement strcspn() 
+    for architectures without it */
+
+#if HAVE_CONFIG_H
+#  include <sic/config.h>
+#endif
+
+#include <sys/types.h>
+
+#if STDC_HEADERS
+#  include <string.h>
+#elif HAVE_STRINGS_H
+#  include <strings.h>
+#endif
+
+#if !HAVE_STRCHR
+#  ifndef strchr
+#    define strchr index
+#  endif
+#endif
+
+size_t strcspn (const char *string, const char *reject)
+{
+  size_t count = 0;
+  while (strchr (reject, *string) == 0)
+    ++count, ++string;
+
+  return count;
+}
+\end{Verbatim}
+
+There is no need to add any code to `Makefile.am', because the configure script
+will automatically add the names of the missing function sources to `@LIBOBJS@'. 
+
+
+This implementation uses the autoconf generated `config.h' to get information about the availability of headers and type definitions. It is interesting that autoscan reports that strchr and strrchr, which are used in the fallback implementations of strcspn and strspn respectively, are themselves not portable! Luckily, the Autoconf manual tells me exactly how to deal with this: by adding some code to my `common.h' (paraphrased ({\MbQ\cH90}\z{\MeQ\cH159}) from the literal code in the manual): 
+
+\begin{Verbatim}[frame=single]
+#if !STDC_HEADERS
+#  if !HAVE_STRCHR
+#    define strchr index
+#    define strrchr rindex
+#  endif
+#endif
+\end{Verbatim}
+
+And another macro in `configure.in': 
+
+\begin{Verbatim}[frame=single]
+AC_CHECK_FUNCS(strchr strrchr)
+\end{Verbatim}
+
+\subsection{`sic.c' \& `sic.h'}
+
+
+Since the application binary has no installed header files, there is little point in maintaining a corresponding header file for every source, all of the structures shared by these files, and non-static functions in these files are declared in `sic.h': 
+
+\begin{Verbatim}[frame=single]
+#ifndef SIC_H
+#define SIC_H 1
+
+#include <sic/common.h>
+#include <sic/sic.h>
+#include <sic/builtin.h>
+
+BEGIN_C_DECLS
+
+extern Syntax syntax_table[];
+extern Builtin builtin_table[];
+extern Syntax syntax_table[];
+
+extern int evalstream    (Sic *sic, FILE *stream);
+extern int evalline      (Sic *sic, char **pline);
+extern int source        (Sic *sic, const char *path);
+extern int syntax_init   (Sic *sic);
+extern 
+ int syntax_finish (Sic *sic, BufferIn *in, BufferOut *out);
+
+END_C_DECLS
+
+#endif /* !SIC_H */
+\end{Verbatim}
+
+To hold together everything you have seen so far, the main function creates 
+a Sic parser and initialises it by adding syntax handler functions and builtin 
+functions from the two tables defined earlier, before handing control to 
+evalstream which will eventually ({\MbQ\cH124}\z{\MbQ\cH40}) exit when the input stream is 
+exhausted ({\MbQ\cH224}\z{\MaQ\cH234}).
+
+\begin{Verbatim}[frame=single]
+int main (int argc, char * const argv[])
+{
+  int result = EXIT_SUCCESS;
+  Sic *sic = sic_new ();
+  
+  /* initialise the system */
+  if (sic_init (sic) != SIC_OKAY)
+      sic_fatal ("sic initialisation failed");
+  signal (SIGINT, SIG_IGN);
+  setbuf (stdout, NULL);
+
+  /* initial symbols */
+  sicstate_set (sic, "PS1", "] ", NULL);
+  sicstate_set (sic, "PS2", "- ", NULL);
+  
+  /* evaluate the input stream */
+  evalstream (sic, stdin);
+
+  exit (result);
+}
+\end{Verbatim}
+
+Now, the shell can be built and used: 
+
+\begin{Verbatim}[frame=single]
+$ bootstrap
+...
+$ ./configure --with-readline
+...
+$ make
+...
+make[2]: Entering directory `/tmp/sic/src'
+gcc -DHAVE_CONFIG_H -I. -I.. -I../sic -I.. \
+ -I../sic -g -c sic.c
+gcc -DHAVE_CONFIG_H -I. -I.. -I../sic -I.. \
+ -I../sic -g -c sic_builtin.c
+gcc -DHAVE_CONFIG_H -I. -I.. -I../sic -I.. \
+ -I../sic -g -c sic_repl.c
+gcc -DHAVE_CONFIG_H -I. -I.. -I../sic -I.. \
+ -I../sic -g -c sic_syntax.c
+gcc  -g -O2  -o sic  sic.o sic_builtin.o   \
+ sic_repl.o sic_syntax.o ../sic/libsic.a   \
+ ../replace/libreplace.a -lreadline
+make[2]: Leaving directory `/tmp/sic/src'
+...
+$ ./src/sic
+] pwd
+/tmp/sic
+] ls -F
+Makefile     aclocal.m4   config.cache    configure*    sic/
+Makefile.am  bootstrap*   config.log      configure.in  src/
+Makefile.in  config/      config.status*  replace/
+] exit
+$
+\end{Verbatim}
+
+This chapter has developed a solid foundation of code, which I will return to 
+in \ref{C_A_Large_GNU_Autotools_Project} A Large GNU Autotools Project (page
+\pageref{C_A_Large_GNU_Autotools_Project}), when Libtool will join the fray.
+The chapters leading up to that explain what Libtool is for, how to use it 
+and integrate it into your own projects, and the advantages it offers over 
+building shared libraries with Automake (or even just Make) alone.
+

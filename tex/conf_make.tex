@@ -1,0 +1,471 @@
+\chapter{How to run configure and make}\label{C_How_to_run_configure_and_make}
+A package constructed using Autoconf will come with a `configure' script. A user who wants to build and install the package must run this script in order to prepare their source tree in order to build it on their particular system. The actual build process is performed using the make program. 
+
+
+The `configure' script tests system features. For example, it might test whether the C library defines the time\_{}t data type for use by the time() C library function. The `configure' script then makes the results of those tests available to the program while it is being built. 
+
+
+This chapter explains how to invoke a `configure' script from the perspective of a user--someone who just wants to take your package and compile it on their system with a minimum of fuss. It is because Autoconf works as well as it does that it is usually possible to build a package on any kind of machine with a simple configure; make command line. The topics covered in this chapter include how to invoke configure, the files that configure generates and the most useful `Makefile' targets--actions that you want make to perform--that will be available when compiling the package (see chapter 4. Introducing `Makefile's).
+
+\section{Configuring}
+A `configure' script takes a large number of command line options. The set of options can vary from one package to the next, although a number of basic options are always present. The available options can be discovered by running `configure' with the `--help' option. Although many of these options are esoteric, it's worthwhile knowing of their existence when configuring packages with special installation requirements. Each option will be briefly described below: 
+
+\begin{description}
+\item[`--cache-file=file']
+\ %
+
+`configure' runs tests on your system to determine the availability of features (or bugs!). The results of these tests can be stored in a cache file to speed up subsequent invocations of configure. The presence of a well primed cache file makes a big improvement when configuring a complex tree which has `configure' scripts in each subtree. 
+
+\item[`--help']
+\ %
+
+Outputs a help message. Even experienced users of `configure' need to use `--help' occasionally, as complex projects will include additional options for per-project configuration. For example, `configure' in the GCC package allows you to control whether the GNU assembler will be built and used by GCC in preference to a vendor's assembler. 
+
+\item[`--no-create']
+\ %
+
+One of the primary functions of `configure' is to generate output files. This option prevents `configure' from generating such output files. You can think of this as a kind of dry run, although the cache will still be modified. 
+
+\item[`--quiet']
+\item[`--silent']
+\ %
+
+As `configure' runs its tests, it outputs brief messages telling the user what the script is doing. This was done because `configure' can be slow. If there was no such output, the user would be left wondering what is happening. By using this option, you too can be left wondering! 
+
+\item[`--version']
+\ %
+
+Prints the version of Autoconf that was used to generate the `configure' script. 
+
+\item[`--prefix=prefix']
+\ %
+
+The --prefix option is one of the most frequently used. If generated `Makefile's choose to observe the argument you pass with this option, it is possible to entirely relocate the architecture-independent portion of a package when it is installed. For example, when installing a package like Emacs, the following command line will cause the Emacs Lisp files to be installed in `/opt/gnu/share': 
+
+
+ 
+        \$ ./configure --prefix=/opt/gnu
+
+
+
+ It is important to stress that this behavior is dependent on the generated files making use of this information. For developers writing these files, Automake simplifies this process a great deal. Automake is introduced in 7. Introducing GNU Automake. 
+
+
+\item[`--exec-prefix=eprefix']
+\ %
+
+Similar to `--prefix', except that it sets the location of installed files which are architecture-dependent. The compiled `emacs' binary is such a file. If this option is not given, the default `exec-prefix' value inserted into generated files is set to the same values at the `prefix'. 
+
+\item[`--bindir=dir']
+\ %
+
+Specifies the location of installed binary files. While there may be other generated files which are binary in nature, binary files here are defined to be programs that are run directly by users. 
+
+\item[`--sbindir=dir']
+Specifies the location of installed superuser binary files. These are programs which are usually only run by the superuser. 
+
+\item[`--libexecdir=dir']
+\ %
+
+Specifies the location of installed executable support files. Contrasted with `binary files', these files are never run directly by users, but may be executed by the binary files mentioned above. 
+
+\item[`--datadir=dir']
+\ %
+
+Specifies the location of generic data files. 
+
+\item[`--sysconfdir=dir']
+\ %
+
+Specifies the location of read-only data used on a single machine. 
+
+\item[`--sharedstatedir=dir']
+\ %
+
+Specifies the location of data which may be modified, and which may be shared across several machines. 
+
+\item[`--localstatedir=dir']
+\ %
+
+Specifies the location of data which may be modified, but which is specific to a single machine. 
+
+\item[`--libdir=dir']
+\ %
+
+Specifies where object code library should be installed. 
+
+\item[`--includedir=dir']
+\ %
+
+Specifies where C header files should be installed. Header files for other languages such as C++ may be installed here also. 
+
+\item[`--oldincludedir=dir']
+\ %
+
+Specifies where C header files should be installed for compilers other than GCC. 
+
+\item[`--infodir=dir']
+\ %
+
+Specifies where Info format documentation files should be installed. Info is the documentation format used by the GNU project. 
+
+\item[`--mandir=dir']
+\ %
+
+Specifies where manual pages should be installed. 
+
+\item[`--srcdir=dir']
+\ %
+
+This option does not affect installation. Instead, it tells `configure' where the source files may be found. It is normally not necessary to specify this, since the configure script is normally in the same directory as the source files. 
+
+\item[`--program-prefix=prefix']
+\ %
+
+Specifies a prefix which should be added to the name of a program when installing it. For example, using `--program-prefix=g' when configuring a program normally named `tar' will cause the installed program to be named `gtar' instead. As with the other installation options, this `configure' option only works if it is utilized by the `Makefile.in' file. 
+
+\item[`--program-suffix=suffix']
+\ %
+
+Specifies a suffix which should be appended to the name of a program when installing it. 
+
+\item[`--program-transform-name=program']
+\ %
+
+Here, program is a sed script. When a program is installed, its name will be run through `sed -e script' to produce the installed name. 
+
+\item[`--build=build']
+\ %
+
+Specifies the type of system on which the package will be built. If not specified, the default will be the same configuration name as the host. 
+
+\item[`--host=host']
+\ %
+
+Specifies the type of system on which the package will run--or be hosted. If not specified, the host triplet is determined by executing `config.guess'. 
+
+\item[`--target=target']
+\ %
+
+Specifies the type of system which the package is to be targeted to. This makes the most sense in the context of programming language tools like compilers and assemblers. If not specified, the default will be the same configuration name as the host. 
+
+\item[`--disable-feature']
+\ %
+
+Some packages may choose to provide compile-time configurability for large-scale options such as using the Kerberos authentication system or an experimental compiler optimization pass. If the default is to provide such features, they may be disabled with `--disable-feature', where feature is the feature's designated name. For example: 
+
+
+ 
+\$ ./configure --disable-gui
+
+
+
+\item[`--enable-feature[=arg]']
+\ %
+
+Conversely, some packages may provide features which are disabled by default. To enable them, use `--enable-feature', where feature is the feature's designated name. A feature may accept an optional argument. For example: 
+
+
+ 
+        \$ ./configure --enable-buffers=128
+
+
+
+ Using `--enable-feature=no' is synonymous with `--disable-feature', described above. 
+
+
+\item[`--with-package[=arg]']
+\ %
+
+In the free software community, there is a healthy tendency to reuse existing packages and libraries where possible. At the time when a source tree is configured by `configure', it is possible to provide hints about other installed packages. For example, the BLT widget toolkit relies on Tcl and Tk. To configure BLT, it may be necessary to give `configure' some hints about where you have installed Tcl and Tk: 
+
+
+ 
+        \$ ./configure --with-tcl=/usr/local --with-tk=/usr/local
+
+
+
+ Using `--with-package=no' is synonymous with `--without-package' which is described below. 
+
+
+\item[`--without-package']
+\ %
+
+Sometimes you may not want your package to inter-operate with some pre-existing package installed on your system. For example, you might not want your new compiler to use GNU ld. You can prevent this by using an option such as: 
+
+
+ 
+        \$ ./configure --without-gnu-ld
+
+
+
+\item[`--x-includes=dir']
+\ %
+
+This option is really a specific instance of a `--with-package' option. At the time when Autoconf was initially being developed, it was common to use `configure' to build programs to run on the X Window System as an alternative to Imake. The `--x-includes' option provides a way to guide the configure script to the directory containing the X11 header files. 
+
+\item[`--x-libraries=dir']
+\ %
+
+Similarly, the --x-libraries option provides a way to guide `configure' to the directory containing the X11 libraries. 
+\end{description}
+
+It is unnecessary, and often undesirable, to run `configure' from within the 
+source tree. Instead, a well-written `Makefile' generated by `configure' will 
+be able to build packages whose source files reside in another tree. The 
+advantages of building derived files in a separate tree to the source code 
+are fairly obvious: the derived files, such as object files, would clutter 
+the source tree. This would also make it impossible to build those same 
+object files on a different system or with a different configuration.
+Instead, it is recommended to use three trees: a source tree,
+a build tree and an install tree. Here is a closing example of how to 
+build the GNU malloc package in this way:
+
+%\bigskip
+%%\fboxsep=15pt
+%\definecolor{dark}{gray}{0.4}
+%%\colorbox{dark}{\begin{minipage}{5cm}
+%%aaa
+%%\end{minpage}}
+%
+%\colorbox{black}{\begin{minipage}{12cm}
+%%\begin{Verbatim}
+%  \textcolor{white}{\$ gtar zxf mmalloc-1.0.tar.gz}
+%
+%  \textcolor{white}{\$ mkdir build \&\& cd build}
+%
+%  \textcolor{white}{\$ ../mmalloc-1.0/configure}
+%
+%  \textcolor{white}{creating cache ./config.cache}
+%
+%  \textcolor{white}{checking for gcc... gcc}
+%
+%  \textcolor{white}{checking whether the C compiler (gcc  ) works... yes}
+%
+%  \textcolor{white}{checking whether the C compiler (gcc  ) is a cross-compiler... no}
+%
+%  \textcolor{white}{checking whether we are using GNU C... yes}
+%
+%  \textcolor{white}{checking whether gcc accepts -g... yes}
+%
+%  \textcolor{white}{checking for a BSD compatible install... /usr/bin/install -c}
+%
+%  \textcolor{white}{checking host system type... i586-pc-linux-gnu}
+%
+%  \textcolor{white}{checking build system type... i586-pc-linux-gnu}
+%
+%  \textcolor{white}{checking for ar... ar}
+%
+%  \textcolor{white}{checking for ranlib... ranlib}
+%
+%  \textcolor{white}{checking how to run the C preprocessor... gcc -E}
+%
+%  \textcolor{white}{checking for unistd.h... yes}
+%
+%  \textcolor{white}{checking for getpagesize... yes}
+%
+%  \textcolor{white}{checking for working mmap... yes}
+%
+%  \textcolor{white}{checking for limits.h... yes}
+%
+%  \textcolor{white}{checking for stddef.h... yes}
+%
+%  \textcolor{white}{updating cache ../config.cache}
+%
+%  \textcolor{white}{creating ./config.status}
+%%\end{Verbatim}
+%\end{minipage}}
+
+\begin{lstlisting}[basicstyle=\color{white},backgroundcolor=\color{black},breaklines=true]
+  $ gtar zxf mmalloc-1.0.tar.gz
+  $ mkdir build && cd build
+  $ ../mmalloc-1.0/configure
+  creating cache ./config.cache
+  checking for gcc... gcc
+  checking whether the C compiler (gcc  ) works... yes
+  checking whether the C compiler (gcc  ) is a cross-compiler... no
+  checking whether we are using GNU C... yes
+  checking whether gcc accepts -g... yes
+  checking for a BSD compatible install... /usr/bin/install -c
+  checking host system type... i586-pc-linux-gnu
+  checking build system type... i586-pc-linux-gnu
+  checking for ar... ar
+  checking for ranlib... ranlib
+  checking how to run the C preprocessor... gcc -E
+  checking for unistd.h... yes
+  checking for getpagesize... yes
+  checking for working mmap... yes
+  checking for limits.h... yes
+  checking for stddef.h... yes
+  updating cache ../config.cache
+  creating ./config.status
+\end{lstlisting}
+
+\bigskip
+\bigskip
+Now that this build tree is configured, it is possible to go on and 
+build the package and install it into the default location of `/usr/local': 
+
+\bigskip
+  \$ make all \&\& make install
+
+\section{Files generated by configure}
+
+After you have invoked `configure', you will discover a number of generated files in your build tree. The build directory structure created by `configure' and the number of files will vary from package to package. Each of the generated files are described below and their relationships are shown in C. Generated File Dependencies: 
+
+
+\begin{description} 
+
+\item[`config.cache']
+\ %
+
+`configure' can cache the results of system tests that have been performed to speed up subsequent tests. This file contains the cache data and is a plain text file that can be hand-modified or removed if desired. 
+
+\item[`config.log']
+\ %
+
+As `configure' runs, it outputs a message describing each test it performs and the result of each test. There is substantially more output produced by the shell and utilities that `configure' invokes, but it is hidden from the user to keep the output understandable. The output is instead redirected to `config.log'. This file is the first place to look when `configure' goes hay-wire or a test produces a nonsense result. A common scenario is that `configure', when run on a Solaris system, will tell you that it was unable to find a working C compiler. An examination of `config.log' will show that Solaris' default `/usr/ucb/cc' is a program that informs the user that the optional C compiler is not installed. 
+
+\item[`config.status']
+\ %
+
+`configure' generates a shell script called `config.status' that may be used to recreate the current configuration. That is, all generated files will be regenerated. This script can also be used to re-run `configure' if the `--recheck' option is given. 
+
+\item[`config.h']
+\ %
+
+Many packages that use `configure' are written in C or C++. Some of the 
+tests that `configure' runs involve examining variability in the C and 
+C++ programming languages and implementations thereof. So that source code 
+can programmatically deal with these differences, \#define preprocessor 
+directives can be optionally placed in a config header, usually 
+called `config.h', as `configure' runs. Source files may then include 
+the `config.h' file and act accordingly:
+
+\bigskip
+\colorbox{black}{\begin{minipage}{12cm}
+%\begin{Verbatim}
+  \textcolor{white}{\#if HAVE\_{}CONFIG\_{}H}
+
+  \textcolor{white}{\#include $<$config.h$>$}
+
+  \textcolor{white}{\#endif /* HAVE\_{}CONFIG\_{}H */}
+
+  \textcolor{white}{\#if HAVE\_{}UNISTD\_{}H}
+
+  \textcolor{white}{\#include $<$unistd.h$>$}
+
+  \textcolor{white}{\#endif /* HAVE\_{}UNISTD\_{}H */}
+
+\end{minipage}}
+\bigskip
+
+We recommend always using a config header. 
+
+
+\item[`Makefile']
+\ %
+
+One of the common functions of `configure' is to generate `Makefile's and other files. As it has been stressed, a `Makefile' is just a file often generated by `configure' from a corresponding input file (usually called `Makefile.in'). The following section will describe how you can use make to process this `Makefile'. There are other cases where generating files in this way can be helpful. For instance, a Java developer might wish to make use of a `defs.java' file generated from `defs.java.in'. 
+\end{description} 
+
+\section{The most useful Makefile targets}
+
+
+By now `configure' has generated the output files such as a `Makefile'. Most projects include a `Makefile' with a basic set of well-known targets (see section 4.1 Targets and dependencies). A target is a name of a task that you want make to perform -- usually it is to build all of the programs belonging to your package (commonly known as the all target). From your build directory, the following commands are likely to work for a configured package:
+
+\bigskip
+\noindent
+make all
+
+Builds all derived files sufficient to declare the package built. 
+
+\noindent
+make check 
+
+Runs any self-tests that the package may have. 
+
+\noindent
+make install 
+
+Installs the package in a predetermined location. 
+
+\noindent
+make clean 
+
+Removes all derived files. 
+
+\bigskip
+
+There are other less commonly used targets which are likely to be recognized, particularly if the package includes a `Makefile' which conforms to the GNU `Makefile' standard or is generated by automake. You may wish to inspect the generated `Makefile' to see what other targets have been included. 
+
+\section{Configuration Names}\label{S_Configuration_Names}
+
+The GNU Autotools name all types of computer systems using a configuration name. This is a name for the system in a standardized format. 
+
+Some example configuration names are `sparc-sun-solaris2.7', `i586-pc-linux-gnu', or `i386-pc-cygwin'. 
+
+
+All configuration names used to have three parts, and in some documentation they are still called configuration triplets. A three part configuration name is cpu-manufacturer-operating\_{}system. Currently configuration names are permitted to have four parts on systems which distinguish the kernel and the operating system, such as GNU/Linux. In these cases, the configuration name is cpu-manufacturer-kernel-operating\_{}system. 
+
+
+When using a configuration name in an option to a tool such as configure, it is normally not necessary to specify an entire name. In particular, the middle field (manufacturer, described below) is often omitted, leading to strings such as `i386-linux' or `sparc-sunos'. The shell script `config.sub' is used to translate these shortened strings into the canonical form. 
+
+
+On most Unix variants, the shell script `config.guess' will print the correct configuration name for the system it is run on. It does this by running the standard `uname' program, and by examining other characteristics of the system. On some systems, `config.guess' requires a working C compiler or an assembler. 
+
+
+Because `config.guess' can normally determine the configuration name for a machine, it is only necessary for a user or developer to specify a configuration name in unusual cases, such as when building a cross-compiler. 
+
+
+Here is a description of each field in a configuration name: 
+
+\begin{description}
+\item[cpu]
+\ %
+
+The type of processor used on the system. This is typically something like `i386' or `sparc'. More specific variants are used as well, such as `mipsel' to indicate a little endian MIPS processor. 
+
+\item[manufacturer]
+\ %
+
+A somewhat freeform field which indicates the manufacturer of the system. This is often simply `unknown'. Other common strings are `pc' for an IBM PC compatible system, or the name of a workstation vendor, such as `sun'. 
+
+\item[operating\_{}system]
+\ %
+
+The name of the operating system which is run on the system. This will be something like `solaris2.5' or `winnt4.0'. There is no particular restriction on the version number, and strings like `aix4.1.4.0' are seen. 
+
+Configuration names may be used to describe all sorts of systems, including embedded systems which do not run any operating system. In this case, the field is normally used to indicate the object file format, such as `elf' or `coff'. 
+
+
+\item[kernel]
+\ %
+
+This is used mainly for GNU/Linux systems. A typical GNU/Linux configuration name is `i586-pc-linux-gnulibc1'. In this case the kernel, `linux', is separated from the operating system, `gnulibc1'. 
+
+`configure' allows fine control over the format of binary files. It is not necessary to build a package for a given kind of machine on that machine natively--instead, a cross-compiler can be used. Moreover, if the package you are trying to build is itself capable of operating in a cross configuration, then the build system need not be the same kind of machine used to host the cross-configured package once the package is built! Consider some examples: 
+
+\end{description}
+
+\bigskip
+\noindent
+Compiling a simple package for a GNU/Linux system.
+
+host = build = target = `i586-pc-linux-gnu' 
+
+\bigskip
+\noindent
+Cross-compiling a package on a GNU/Linux system that is intended to run on
+an IBM AIX machine:
+
+build = `i586-pc-linux-gnu', host = target = `rs6000-ibm-aix3.2' 
+
+\bigskip
+\noindent
+Building a Solaris-hosted MIPS-ECOFF cross-compiler on a GNU/Linux 
+system.
+
+build = `i586-pc-linux-gnu', host = `sparc-sun-solaris2.4',
+
+target = `mips-idt-ecoff' 

@@ -1,0 +1,200 @@
+\chapter{Cross Compilation with GNU Autotools}
+
+Normally, when you build a program, it runs on the system on which you built it. For example, if you compile a simple program, you can immediately run it on the same machine.
+
+This is normally how GNU Autotools is used as well. You run the `configure' script on a particular machine, you run make on the same machine, and the resulting program also runs on the same machine. However, there are cases where it is useful to build a program on one machine and run it on another.
+
+One common example is a program which runs on an embedded system. An embedded system is a special purpose computer, often part of a larger system, such as the computers found within modern automobiles. An embedded system often does not support a general programming environment, so there is no way to run a shell or a compiler on the embedded system. However, it is still necessary to write programs to run on the embedded system. These programs are built on a different machine, normally a general purpose computer. The resulting programs can not be run directly on the general purpose computer. Instead, they are copied onto the embedded system and run there. (We are omitting many details and possibilities of programming embedded systems here, but this should be enough to understand the the points relevant to GNU Autotools. For more information, see a book such as Programming Embedded Systems by Michael Barr.)
+
+Another example where it is useful to build a program on one machine and run it on another is the case when one machine is much faster. It can sometimes be useful to use the faster machine as a compilation server, to build programs which are then copied to the slower machine and run there.
+
+Building a program on one type of system which runs on a different type of system is called cross compiling. Doing this requires a specially configured compiler, known as a cross compiler. Similarly, we speak of cross assemblers, cross linkers, etc. When it is necessary to explicitly distinguish the ordinary sort of compiler, whose output runs on the same type of system, from a cross compiler, we call the ordinary compiler a native compiler. Although the debugger is not strictly speaking a compilation tool, it is meaningful to speak of a cross debugger: a debugger which is used to debug code which runs on another system.
+
+GNU Autotools supports cross compilation in two distinct though related ways. Firstly, GNU Autotools supports configuring and building a cross compiler or other cross compilation tools. Secondly, GNU Autotools supports building tools using a cross compiler (this is sometimes called a Canadian Cross). In the rest of this chapter we will explain how to use GNU Autotools to do these tasks.
+
+If you are not interested in doing cross compilation, you may skip this chapter. However, if you are developing `configure' scripts, we recommend that you at least skim this chapter to get some hints as to how to write them so that it is possible to build your package using a cross compiler; in particular, see 26.4.6 Supporting Building with a Cross Compiler. Even if your package is useless for an embedded system, it is possible that somebody with a very fast compilation server will want to use it to cross compile your package. 
+
+
+\section{Host and Target}
+
+We will first discuss using GNU Autotools to build cross compilation tools. For example, the information in this section will explain how to configure and build the GNU cc compiler as a cross compiler.
+
+When building cross compilation tools, there are two different systems involved: the system on which the tools will run, and the system for which the tools will generate code. The system on which the tools will run is called the host system. The system for which the tools generate code is called the target system.
+
+For example, suppose you have a compiler which runs on a GNU/Linux system and generates ELF programs for a MIPS-based embedded system. In this case, the GNU/Linux system is the host, and the MIPS ELF system is the target. Such a compiler could be called a GNU/Linux cross MIPS ELF compiler, or, equivalently, a `i386-linux-gnu' cross `mips-elf' compiler. We discussed the latter sorts of names earlier; see 3.4 Configuration Names.
+
+Naturally, most programs are not cross compilation tools. For those programs, it does not make sense to speak of a target. It only makes sense to speak of a target for programs like the GNU compiler or the GNU binutils which actually produce running code. For example, it does not make sense to speak of the target of a program like make.
+
+Most cross compilation tools can also serve as native tools. For a native compilation tool, it is still meaningful to speak of a target. For a native tool, the target is the same as the host. For example, for a GNU/Linux native compiler, the host is GNU/Linux, and the target is also GNU/Linux. 
+
+\section{Specifying the Target}
+
+By default, the `configure' script will assume that the target is the same as the host. This is the more common case; for example, when the target is the same as the host, you get a native compiler rather than a cross compiler.
+
+If you want to build a cross compilation tool, you must specify the target 
+explicitly by using the `\verb+--+target' option when you run `configure'
+See chapter \ref{C_How_to_run_configure_and_make}
+How to run configure and make,page \pageref{C_How_to_run_configure_and_make}.
+The argument to `\verb+--+target' is the configuration name of the system for 
+which you wish to generate code. See section \ref{S_Configuration_Names}
+Configuration Names, page \pageref{S_Configuration_Names}. For example,
+to build tools which generate code for a MIPS ELF embedded system,
+you would use `\verb+--+target mips-elf'. 
+
+\section{Using the Target Type}\label{S_Using_the_Target_Type}
+
+A `configure' script for a cross compilation tool will use 
+the `\verb+--+target' option to control how it is built, so that the 
+resulting program will produce programs which run on the appropriate system.
+In this section we explain how you can write your own configure scripts to 
+support the `\verb+--+target' option.
+
+You must start by putting `AC\_{}CANONICAL\_{}SYSTEM' in `configure.in'.
+
+`AC\_{}CANONICAL\_{}SYSTEM' will look for a `\verb+--+target' option and 
+canonicalize it using the `config.sub' shell script (for more information 
+about configuration names, canonicalizing them, and `config.sub',
+see section \ref{S_Configuration_Names} Configuration Names,
+page \pageref{S_Configuration_Names}). `AC\_{}CANONICAL\_{}SYSTEM' will 
+also run `AC\_{}CANONICAL\_{}HOST' to get the host information.
+
+The host and target type will be recorded in the following shell variables: 
+
+\begin{description}
+\item[`host']
+
+    The canonical configuration name of the host. This will normally be determined by running the `config.guess' shell script, although the user is permitted to override this by using an explicit `\verb+--+host' option. 
+\item[`target']
+    The canonical configuration name of the target. 
+\item[`host\_{}alias']
+    The argument to the `\verb+--+host' option, if used. Otherwise, the same as the `host' variable. 
+\item[`target\_{}alias']
+    The argument to the `\verb+--+target' option. If the user did not specify a `\verb+--+target' option, this will be the same as `host\_{}alias'. 
+\item[`host\_{}cpu']
+\item[`host\_{}vendor']
+\item[`host\_{}os']
+    The first three parts of the canonical host configuration name. 
+\item[`target\_{}cpu']
+\item[`target\_{}vendor']
+\item[`target\_{}os']
+    The first three parts of the canonical target configuration name.
+\end{description}
+
+Note that if `host' and `target' are the same string, you can assume a native configuration. If they are different, you can assume a cross configuration.
+
+It is possible for `host' and `target' to represent the same system, but for the strings to not be identical. For example, if `config.guess' returns `sparc-sun-sunos4.1.4', and somebody configures with `\verb+--+target sparc-sun-sunos4.1', then the slight differences between the two versions of SunOS may be unimportant for your tool. However, in the general case it can be quite difficult to determine whether the differences between two configuration names are significant or not. Therefore, by convention, if the user specifies a `\verb+--+target' option without specifying a `\verb+--+host' option, it is assumed that the user wants to configure a cross compilation tool.
+
+The `target' variable should not be handled in the same way as the `target\_{}alias' variable. In general, whenever the user may actually see a string, `target\_{}alias' should be used. This includes anything which may appear in the file system, such as a directory name or part of a tool name. It also includes any tool output, unless it is clearly labelled as the canonical target configuration name. This permits the user to use the `\verb+--+target' option to specify how the tool will appear to the outside world. On the other hand, when checking for characteristics of the target system, `target' should be used. This is because a wide variety of `\verb+--+target' options may map into the same canonical configuration name. You should not attempt to duplicate the canonicalization done by `config.sub' in your own code.
+
+By convention, cross tools are installed with a prefix of the argument used with the `\verb+--+target' option, also known as `target\_{}alias'. If the user does not use the `\verb+--+target' option, and thus is building a native tool, no prefix is used. For example, if gcc is configured with `\verb+--+target mips-elf', then the installed binary will be named `mips-elf-gcc'. If gcc is configured without a `\verb+--+target' option, then the installed binary will be named `gcc'.
+
+The Autoconf macro `AC\_{}ARG\_{}PROGRAM' will handle the names of binaries for you. If you are using Automake, no more need be done; the programs will automatically be installed with the correct prefixes. Otherwise, see the Autoconf documentation for `AC\_{}ARG\_{}PROGRAM'. 
+
+\section{Building with a Cross Compiler}
+
+It is possible to build a program which uses GNU Autotools on one system and to run it on a different type of system. In other words, it is possible to build programs using a cross compiler. In this section, we explain what this means, how to build programs this way, and how to write your `configure' scripts to support it. Building a program on one system and running it on another is sometimes referred to as a Canadian Cross(69). 
+
+\subsection{Canadian Cross Example}
+
+We'll start with an example of a Canadian Cross, to make sure that the concepts are clear. Using a GNU/Linux system, you can build a program which will run on a Solaris system. You would use a GNU/Linux cross Solaris compiler to build the program. You could not run the resulting programs on your GNU/Linux system. After all, they are Solaris programs. Instead, you would have to copy the result over to a Solaris system before you could run it.
+
+Naturally, you could simply build the program on the Solaris system in the first place. However, perhaps the Solaris system is not available for some reason; perhaps you don't actually have one, but you want to build the tools for somebody else to use. Or perhaps your GNU/Linux system is much faster than your Solaris system.
+
+A Canadian Cross build is most frequently used when building programs to run on a non-Unix system, such as DOS or Windows. It may be simpler to configure and build on a Unix system than to support the GNU Autotools tools on a non-Unix system. 
+
+\subsection{Canadian Cross Concepts}
+
+When building a Canadian Cross, there are at least two different systems involved: the system on which the tools are being built, and the system on which the tools will run. The system on which the tools are being built is called the build system. The system on which the tools will run is called the host system. For example, if you are building a Solaris program on a GNU/Linux system, as in the previous example, the build system would be GNU/Linux, and the host system would be Solaris.
+
+Note that we already discussed the host system above; see 26.1 Host and Target. It is, of course, possible to build a cross compiler using a Canadian Cross (i.e., build a cross compiler using a cross compiler). In this case, the system for which the resulting cross compiler generates code is the target system.
+
+An example of building a cross compiler using a Canadian Cross would be building a Windows cross MIPS ELF compiler on a GNU/Linux system. In this case the build system would be GNU/Linux, the host system would be Windows, and the target system would be MIPS ELF. 
+
+\subsection{Build Cross Host Tools}
+
+In order to configure a program for a Canadian Cross build, you must first build and install the set of cross tools you will use to build the program. These tools will be build cross host tools. That is, they will run on the build system, and will produce code that runs on the host system. It is easy to confuse the meaning of build and host here. Always remember that the build system is where you are doing the build, and the host system is where the resulting program will run. Therefore, you need a build cross host compiler.
+
+In general, you must have a complete cross environment in order to do the build. This normally means a cross compiler, cross assembler, and so forth, as well as libraries and header files for the host system. Setting up a complete cross environment can be complex, and is beyond the scope of this book. You may be able to get more information from the `crossgcc' mailing list and FAQ; see http://www.objsw.com/CrossGCC/. 
+
+\subsection{Build and Host Options}
+
+When you run `configure' for a Canadian Cross, you must use both the `\verb+--+build' and `\verb+--+host' options. The `\verb+--+build' option is used to specify the configuration name of the build system. This can normally be the result of running the `config.guess' shell script, and when using a Unix shell it is reasonable to use `\verb+--+build=`config.guess`'. The `\verb+--+host' option is used to specify the configuration name of the host system.
+
+As we explained earlier, `config.guess' is used to set the default value for 
+the `\verb+--+host' option
+(see section \ref{S_Using_the_Target_Type} Using the Target Type,
+page \pageref{S_Using_the_Target_Type}). We can now see that 
+since `config.guess' returns the type of system on which it is run, it 
+really identifies the build system. Since the host system is normally the same as the build system (or, in other words, people do not normally build using a cross compiler), it is reasonable to use the result of `config.guess' as the default for the host system when the `\verb+--+host' option is not used.
+
+It might seem that if the `\verb+--+host' option were used without 
+the `\verb+--+build' option that the `configure' script could 
+run `config.guess' to determine the build system, and presume a Canadian 
+Cross if the result of `config.guess' differed from the `\verb+--+host' 
+option. However, for historical reasons, some configure scripts are 
+routinely run using an explicit `\verb+--+host' option, rather than using 
+the default from `config.guess'. As noted earlier, it is difficult or 
+impossible to reliably compare configuration names
+(see section \ref{S_Using_the_Target_Type} Using the Target Type,
+page \pageref{S_Using_the_Target_Type}). Therefore, by convention, if 
+the `\verb+--+host' option is used, but the `\verb+--+build' option is 
+not used, then the build system defaults to the host system.
+(This convention may be changing in the Autoconf 2.5 release. 
+Check the release notes.) 
+
+\subsection{Canadian Cross Tools}
+
+You must explicitly specify the cross tools which you want to use to build the program. This is done by setting environment variables before running the `configure' script. You must normally set at least the environment variables `CC', `AR', and `RANLIB' to the cross tools which you want to use to build. For some programs, you must set additional cross tools as well, such as `AS', `LD', or `NM'. You would set these environment variables to the build cross host tools which you are going to use.
+
+For example, if you are building a Solaris program on a GNU/Linux system, and your GNU/Linux cross Solaris compiler were named `solaris-gcc', then you would set the environment variable `CC' to `solaris-gcc'. 
+
+\subsection{Supporting Building with a Cross Compiler}
+
+If you want to make it possible to build a program which you are developing using a cross compiler, you must take some care when writing your `configure.in' and make rules. Simple cases will normally work correctly. However, it is not hard to write configure tests which will fail when building with a cross compiler, so some care is required to avoid this.
+
+You should write your `configure' scripts to support building with a cross compiler if you can, because that will permit others to build your program on a fast compilation server. 
+
+\subsubsection[in Configure Scripts]{Supporting Building with a Cross Compiler in Configure Scripts}
+
+In a `configure.in' file, after calling `AC\_{}PROG\_{}CC', you can find out 
+whether the program is being built by a cross compiler by examining the shell 
+variable `cross\_{}compiling'. If the compiler is a cross compiler, which 
+means that this is a Canadian Cross, `cross\_{}compiling' will be `yes'. In a normal configuration, `cross\_{}compiling' will be `no'.
+
+You ordinarily do not need to know the type of the build system in a `configure' script. However, if you do need that information, you can get it by using the macro `AC\_{}CANONICAL\_{}SYSTEM', the same macro which is used to determine the target system. This macro will set the variables `build', `build\_{}alias', `build\_{}cpu', `build\_{}vendor', and `build\_{}os', which correspond to the similar `target' and `host' variables, except that they describe the build system. See section 26.3 Using the Target Type.
+
+When writing tests in `configure.in', you must remember that you want to test the host environment, not the build environment. Macros which use the compiler, such as like `AC\_{}CHECK\_{}FUNCS', will test the host environment. That is because the tests will be done by running the compiler, which is actually a build cross host compiler. If the compiler can find the function, that means that the function is present in the host environment.
+
+Tests like `test -f /dev/ptyp0', on the other hand, will test the build environment. Remember that the `configure' script is running on the build system, not the host system. If your `configure' scripts examines files, those files will be on the build system. Whatever you determine based on those files may or may not be the case on the host system.
+
+Most Autoconf macros will work correctly when building with a cross compiler. The main exception is `AC\_{}TRY\_{}RUN'. This macro tries to compile and run a test program. This will fail when building with a cross compiler, because the program will be compiled for the host system, which means that it will not run on the build system.
+
+The `AC\_{}TRY\_{}RUN' macro provides an optional argument to tell the `configure' script what to do when building with a cross compiler. If that argument is not present, you will get a warning when you run `autoconf':
+
+\begin{quote}
+warning: AC\_{}TRY\_{}RUN called without default to allow cross compiling
+\end{quote}
+
+This tells you that the resulting `configure' script will not work when building with a cross compiler.
+
+In some cases while it may better to perform a test at configure time, it is also possible to perform the test at run time (see section 23.3.2 Testing system features at application runtime). In such a case you can use the cross compiling argument to `AC\_{}TRY\_{}RUN' to tell your program that the test could not be performed at configure time.
+
+There are a few other autoconf macros which will not work correctly when 
+building with a cross compiler: a partial list is `AC\_{}FUNC\_{}GETPGRP',
+`AC\_{}FUNC\_{}SETPGRP', `AC\_{}FUNC\_{}SETVBUF\_{}REVERSED',
+and\\
+`AC\_{}SYS\_{}RESTARTABLE\_{}SYSCALLS'. The `AC\_{}CHECK\_{}SIZEOF' macro 
+is generally not very useful when building with a cross compiler; it permits 
+an optional argument indicating the default size, but there is no way to 
+know what the correct default should be. 
+
+\subsubsection[in Makefiles]{Supporting Building with a Cross Compiler in Makefiles}
+
+The main cross compiling issue in a `Makefile' arises when you want to use a subsidiary program to generate code or data which you will then include in your real program. If you compile this subsidiary program using `\$(CC)' in the usual way, you will not be able to run it. This is because `\$(CC)' will build a program for the host system, but the program is being built on the build system. You must instead use a compiler for the build system, rather than the host system. This compiler is conventionally called `\$(CC\_{}FOR\_{}BUILD)'.
+
+A `configure' script should normally permit the user to define `CC\_{}FOR\_{}BUILD' explicitly in the environment. Your configure script should help by selecting a reasonable default value. If the `configure' script is not being run with a cross compiler (i.e., the `cross\_{}compiling' shell variable is `no' after calling `AC\_{}PROG\_{}CC'), then the proper default for `CC\_{}FOR\_{}BUILD' is simply `\$(CC)'. Otherwise, a reasonable default is simply `cc'.
+
+Note that you should not include `config.h' in a file you are compiling 
+with `\$(CC\_{}FOR\_{}BUILD)'. The `configure' script will build `config.h' with information for the host system. However, you are compiling the file using a compiler for the build system (a native compiler). Subsidiary programs are normally simple filters which do no user interaction, and it is often possible to write them in a highly portable fashion so that the absence of `config.h' is not crucial.
+
+The gcc `Makefile.in' shows a complex situation in which certain files, such as `rtl.c', must be compiled into both subsidiary programs run on the build system and into the final program. This approach may be of interest for advanced GNU Autotools hackers. Note that, at least in GCC 2.95, the build system compiler is rather confusingly called `HOST\_{}CC'. 

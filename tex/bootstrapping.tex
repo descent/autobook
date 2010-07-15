@@ -1,0 +1,150 @@
+\chapter{Bootstrapping}\label{C_Bootstrapping}
+
+
+There are many programs in the GNU Autotools, each of which has a complex set 
+of inputs. When one of these inputs changes, it is important to run the 
+proper programs in the proper order. Unfortunately, it is hard to remember 
+both the dependencies and the ordering. 
+
+For instance, whenever you edit `configure.in', you must remember to re-run 
+{\it aclocal} \underline{in case} ({\MaQ\cH99}\z{\MaQ\cH85}, {\MaQ\cH110}\z{\MbQ\cH41}) you 
+added a reference to a new macro. You must also rebuild `configure' 
+by running {\it autoconf}; `config.h' by running {\it autoheader},
+in case you added a new AC\_{}DEFINE; and {\it automake}
+to propagate ({\MhQ\cH245}\z{\MgQ\cH122}, {\MaQ\cH211}\z{\MgQ\cH122}) any new AC\_{}SUBSTs to the various `Makefile.in's.
+If you edit a `Makefile.am', you must re-run {\it automake}.
+In both these cases, you must then remember 
+to re-run {\it config.status} -- recheck if `configure' changed, followed 
+by config.status to rebuild the `Makefile's. 
+
+
+When doing active development on the build system for your project,
+these dependencies quickly become painful. Of course,
+Automake \marginpar{Automake {\MbQ\cH248}\z{\McQ\cH173}\z{\MaQ\cH224}\z{\MaQ\cH83}\z{\MaQ\cH160}\z{\McQ\cH84}\z{\MbQ\cH220}\z{\MbQ\cH243}\z{\MaQ\cH89}\z{\MbQ\cH52}\z{\MbQ\cH237}\z{\MaQ\cH189}\z{\McQ\cH230}{\MaQ\cH1}}
+knows how to handle this automatically.
+By default, automake generates a `Makefile.in' 
+which knows all these dependencies and which automatically re-runs the 
+appropriate tools in the appropriate order. These rules assume that the 
+correct versions of the tools are all in your PATH. 
+
+
+It helps to have a script ready to do all of this for you once, before you 
+have generated a `Makefile' that will automatically run the tools in 
+the correct order, or when you make a fresh ({\MbQ\cH104}\z{\MkQ\cH24}\z{\MbQ\cH237}; {\MbQ\cH132}\z{\McQ\cH37}\z{\MaQ\cH139}\z{\MbQ\cH9}\z{\McQ\cH84}\z{\MbQ\cH220}\z{\McQ\cH172}\z{\MbQ\cH237})
+checkout of the code from a CVS repository where the developers don't 
+keep generated files under source control. There are at least two 
+opposing ({\MaQ\cH250}\z{\McQ\cH222}\z{\MbQ\cH237}; {\MbQ\cH243}\z{\MaQ\cH250}\z{\MbQ\cH237}) schools ({\MaQ\cH231}\z{\MbQ\cH187}, {\MbQ\cH188}\z{\MbQ\cH187}) of 
+thought regarding ({\McQ\cH201}\z{\MbQ\cH107}; {\MaQ\cH255}... {\McQ\cH55}\z{\McQ\cH127}) how to go about 
+this -- the \underline{autogen.sh school}
+and the \underline{bootstrap school}: 
+
+\begin{description}
+\item[autogen.sh]
+\ %
+
+\underline{From the outset} ({\McQ\cH199}\z{\MaQ\cH225}), this is a poor ({\MiQ\cH246}\z{\MdQ\cH12}\z{\MbQ\cH237}, {\MhQ\cH255}\z{\MaQ\cH253}\z{\MbQ\cH237}, {\MaQ\cH46}\z{\MaQ\cH107}\z{\McQ\cH151}\z{\MbQ\cH237})
+name for a bootstrap script,
+since there is already a GNU automatic text generation tool called AutoGen.
+Often packages that follow this convention have the script automatically 
+run the generated configure script after the boostrap process, passing 
+autogen.sh arguments through to configure. Except you don't know what options 
+you want yet, since you can't run `configure \verb+--+help' until configure 
+has been generated. I suggest that if you find yourself compiling a project 
+\underline{set up} ({\MoQ\cH42}\z{\McQ\cH13}; {\MbQ\cH29}\z{\McQ\cH168}, {\MbQ\cH29}\z{\McQ\cH13}, {\MdQ\cH147}\z{\McQ\cH13}) in this way that you type:
+
+\begin{Verbatim}[frame=single]
+$ /bin/sh ./autogen.sh --help
+\end{Verbatim}
+
+and ignore the spurious ({\MaQ\cH99}\z{\MbQ\cH237}; {\MdQ\cH102}\z{\McQ\cH168}\z{\MbQ\cH237}; {\MgQ\cH109}\z{\MkQ\cH4}\z{\MbQ\cH52}\z{\MbQ\cH237}) warning that tells you 
+configure will be executed. 
+
+\item[bootstrap]
+\ %
+
+Increasingly, projects are starting to call their bootstrap scripts `bootstrap'. Such scripts simply run the various commands required to bring the source tree into a state where the end user can simply:
+
+\begin{Verbatim}[frame=single]
+$ configure
+$ make
+$ make install
+\end{Verbatim}
+
+Unfortunately, proponents ({\MbQ\cH84}\z{\McQ\cH135}\z{\MaQ\cH65}; {\MfQ\cH203}\z{\McQ\cH136}\z{\McQ\cH54}) of this school of thought don't put 
+the bootstrap script in their distributed tarballs, since the script is 
+unnecessary except when the build environment of a developer's machine 
+has changed. This means the proponents of the autogen.sh school may 
+never see the advantages of the other method. 
+\end{description}
+
+Autoconf comes with a program called autoreconf which essentially does the 
+work of the bootstrap script. autoreconf is rarely used because,
+historically, has not been very well known, and only in Autoconf 2.13 did 
+it acquire ({\MaQ\cH166}\z{\MbQ\cH41}, {\MbQ\cH215}\z{\MbQ\cH41}, {\MaQ\cH231}\z{\MaQ\cH131}; {\MjQ\cH244}\z{\MbQ\cH65}) the ability to work with Automake.
+Unfortunately, even the Autoconf 2.13 autoreconf does not handle 
+libtoolize and some automake-related options that are frequently nice to use. 
+
+
+We recommend the bootstrap method, until autoreconf is fixed. At this point 
+bootstrap has not been standardized, so here is a version of the script we 
+used while writing this book\footnote{This book is built using automake and autoconf. We couldn't find a use for libtool.}: 
+
+
+\begin{Verbatim}[frame=single]
+#! /bin/sh
+
+aclocal \
+&& automake --gnu --add-missing \
+&& autoconf
+\end{Verbatim}
+
+We don't use autoreconf here because that script (as of Autoconf 2.13) also 
+does not handle the `\verb+--+add-missing' option, which we want. A typical 
+bootstrap might also run libtoolize or autoheader. 
+
+
+It is also important for all developers on a project to have the same
+versions of the tools installed so that these rules don't 
+inadvertantly ({\MaQ\cH46}\z{\MbQ\cH183}\z{\MbQ\cH60}; {\MlQ\cH80}\z{\MfQ\cH77}; {\MhQ\cH78}\z{\MfQ\cH31}) cause problems due to differences 
+between tool versions. This version skew ({\MfQ\cH233}\z{\MbQ\cH237}, {\MmQ\cH11}\z{\MbQ\cH237}, {\MdQ\cH82}\z{\MbQ\cH237}) problem 
+\underline{turns out to be}
+( ({\MbQ\cH40}\z{\MbQ\cH81}\z{\MaQ\cH177}\z{\MiQ\cH200}\z{\MbQ\cH67}\z{\MbQ\cH36}\z{\MaQ\cH241}\z{\MiQ\cH200}) {\McQ\cH33}\z{\MbQ\cH139}\z{\MbQ\cH117}...; {\MaQ\cH159}\z{\MaQ\cH86}\z{\MbQ\cH117}...; {\McQ\cH132}\z{\MbQ\cH112}\z{\MbQ\cH117}...) fairly 
+significant ({\McQ\cH189}\z{\McQ\cH98}\z{\MbQ\cH237}, {\McQ\cH189}\z{\MaQ\cH215}\z{\MbQ\cH237}; {\MdQ\cH77}\z{\MbQ\cH41}\z{\MbQ\cH183}\z{\MbQ\cH60}\z{\MbQ\cH237}) in the field. So,
+automake provides a way to disable these 
+rules by default, while still allowing users to enable them when they 
+know their environment is set up correctly. 
+
+
+In order to enable this mode, you must first add AM\_{}MAINTAINER\_{}MODE to
+ `configure.in'. This will add the `\verb+--+enable-maintainer-mode' option to `configure'; when specified this flag will cause these so-called `maintainer rules' to be enabled. 
+
+
+Note that maintainer mode is a controversial ({\MhQ\cH17}\z{\McQ\cH127}\z{\MbQ\cH237}; {\MaQ\cH170}\z{\MhQ\cH79}\z{\MbQ\cH237}) feature.
+Some people like to use it because it causes fewer bug reports in some 
+situations. For instance, CVS does not preserve relative timestamps on files.
+If your project has both `configure.in' and `configure' checked in, and 
+maintainer mode is not in use, then sometimes make will decide to 
+rebuild `configure' even though it is not really required.
+This \underline{in turn} ({\MaQ\cH89}\z{\MbQ\cH159}; {\MjQ\cH51}\z{\MaQ\cH131}) means more 
+headaches ({\MaQ\cH73}\z{\MaQ\cH65}\z{\McQ\cH229}\z{\MhQ\cH85}\z{\MbQ\cH237}\z{\MaQ\cH57}, {\MkQ\cH44}\z{\MhQ\cH4}) for your 
+developers -- on a large project most developers won't touch `configure.in' 
+and many may not even want to install 
+the GNU Autotools\footnote{Shock ({\MjQ\cH203}\z{\MkQ\cH8}; {\MeQ\cH249}\z{\McQ\cH150}\z{\MjQ\cH203}\z{\MkQ\cH8}\z{\MbQ\cH237}\z{\MaQ\cH57}\z{\MaQ\cH75}),
+horror ({\MfQ\cH39}\z{\MfQ\cH35}, {\MjQ\cH203}\z{\MkQ\cH8}, {\MgQ\cH132}\z{\MkQ\cH10}\z{\MlQ\cH92}\z{\MbQ\cH205}) }. 
+
+
+The other camp ({\MjQ\cH179}\z{\MbQ\cH208}; {\MfQ\cH203}\z{\McQ\cH136}\z{\MgQ\cH47}\z{\McQ\cH248}\z{\MaQ\cH51}\z{\McQ\cH50}) claims ({\MaQ\cH51}\z{\MbQ\cH34}, {\MbQ\cH105}\z{\McQ\cH107}, {\McQ\cH59}\z{\McQ\cH8}) that 
+end users should use the same build system that 
+developers use, that maintainer mode is simply 
+unaesthetic( aesthetic {\MaQ\cH246}\z{\McQ\cH49}\z{\MbQ\cH237}; {\MaQ\cH120}\z{\MbQ\cH127}\z{\MaQ\cH246}\z{\McQ\cH49}\z{\MjQ\cH24}\z{\MdQ\cH226}),
+and furthermore ({\McQ\cH55}\z{\MaQ\cH47}, {\MbQ\cH164}\z{\MaQ\cH213}, {\MaQ\cH121}\z{\McQ\cH54}) that the modality ({\MbQ\cH36}\z{\MbQ\cH31}) of 
+maintainer mode is dangerous -- you can easily forget what mode you are 
+in and thus forget to rebuild, and thus correctly test, a change to 
+the configure or build system. When maintainer mode is not in use,
+the Automake-supplied missing script will be used to warn users 
+when it appears that they need a maintainer tool that they do not have. 
+
+
+The approach you take depends strongly on the 
+social ({\MbQ\cH254}\z{\MaQ\cH62}\z{\MbQ\cH237}, {\MaQ\cH62}\z{\McQ\cH210}\z{\MbQ\cH237}, {\McQ\cH58}\z{\MiQ\cH215}\z{\MbQ\cH237}) structures surrounding your project. 
+

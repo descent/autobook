@@ -1,0 +1,166 @@
+\chapter{Introducing `Makefile's}
+
+
+A `Makefile' is a specification of dependencies between files and how to 
+resolve those dependencies such that an overall goal, known as a target, can 
+be reached. `Makefile's are processed by the make utility. Other references 
+describe the syntax of `Makefile's and the various implementations of make in 
+detail. This chapter provides an overview into `Makefile's and gives just 
+enough information to write custom rules in a `Makefile.am'
+(see chapter \ref{C_Introducing_GNU_Automake} Introducing GNU Automake,
+page \pageref{C_Introducing_GNU_Automake}) or `Makefile.in'. 
+
+\section{Targets and dependencies}
+
+
+The make program attempts to bring a target up to date by bring all of the target's dependencies up to date. These dependencies may have further dependencies. Thus, a potentially complex dependency graph forms when processing a typical `Makefile'. From a simple `Makefile' that looks like this: 
+
+\bigskip
+\begin{Verbatim}[frame=single]
+all: foo
+
+foo: foo.o bar.o baz.o
+
+.c.o:
+        $(CC) $(CFLAGS) -c $< -o $@
+
+.l.c:
+        $(LEX) $< && mv lex.yy.c $@
+
+\end{Verbatim}
+
+\bigskip
+\noindent
+We can draw a dependency graph that looks like this: 
+
+ 
+\bigskip
+\begin{Verbatim}[frame=single]
+
+               all
+                |
+               foo
+                |
+        .-------+-------.
+       /        |        \
+    foo.o     bar.o     baz.o
+      |         |         |
+    foo.c     bar.c     baz.c
+                          |
+                        baz.l
+
+\end{Verbatim}
+
+
+\bigskip
+\noindent
+Unless the `Makefile' contains a directive to make, all targets are assumed to be filename and rules must be written to create these files or somehow bring them up to date. 
+
+
+When leaf nodes are found in the dependency graph, the `Makefile' must include a set of shell commands to bring the dependent up to date with the dependency. Much to the chagrin of many make users, up to date means the dependent has a more recent timestamp than the target. Moreover, each of these shell commands are run in their own sub-shell and, unless the `Makefile' instructs make otherwise, each command must exit with an exit code of 0 to indicate success. 
+
+
+Target rules can be written which are executed unconditionally. This is achieved by specifying that the target has no dependents. A simple rule which should be familiar to most users is: 
+
+
+
+\bigskip
+\begin{Verbatim}[frame=single]
+clean:
+        -rm *.o core
+\end{Verbatim}
+
+
+
+\section{Makefile syntax}
+
+
+`Makefile's have a rather particular syntax that can trouble new users. There are many implementations of make, some of which provide non-portable extensions. An abridged description of the syntax follows which, for portability, may be stricter than you may be used to. 
+
+
+Comments start with a `\#' and continue until the end of line. They may appear anywhere except in command sequences--if they do, they will be interpreted by the shell running the command. The following `Makefile' shows three individual targets with dependencies on each: 
+
+
+
+ 
+
+\bigskip
+\begin{Verbatim}[frame=single]
+target1:  dep1 dep2 ... depN
+<tab>     cmd1
+<tab>     cmd2
+<tab>     ...
+<tab>     cmdN
+
+target2:  dep4 dep5
+<tab>     cmd1
+<tab>     cmd2
+
+dep4 dep5:
+<tab>     cmd1
+\end{Verbatim}
+
+
+
+ Target rules start at the beginning of a line and are followed by a colon. Following the colon is a whitespace separated list of dependencies. A series of lines follow which contain shell commands to be run by a sub-shell (the default is the Bourne shell). Each of these lines must be prefixed by a horizontal tab character. This is the most common mistake made by new make users. 
+
+
+These commands may be prefixed by an `@' character to prevent make from echoing the command line prior to executing it. They may also optionally be prefixed by a `-' character to allow the rule to continue if the command returns a non-zero exit code. The combination of both characters is permitted.  
+
+\section{Macros}
+
+
+A number of useful macros exist which may be used anywhere throughout the `Makefile'. Macros start with a dollar sign, like shell variables. Our first `Makefile' used a few: 
+
+\begin{Verbatim}[frame=single]
+$(CC) $(CFLAGS) -c $< -o $@
+\end{Verbatim}
+
+Here, syntactic forms of `\$(..)' are make variable expansions. It is possible to define a make variable using a `var=value' syntax: 
+
+\begin{Verbatim}[frame=single]
+CC = ec++
+\end{Verbatim}
+
+
+In a `Makefile', \$(CC) will then be literally replaced by `ec++'. make has a 
+number of built-in variables and default values. The default value 
+for `\$(CC)' is cc. 
+
+
+Other built-in macros exist with fixed semantics. The two most common macros are \$@ and \verb+$<+. They represent the names of the target and the first 
+dependency for the rule in which they appear. \$@ is available in any rule,
+but for some versions of make \verb+$<+ is only available in suffix rules. Here is a simple `Makefile': 
+
+\begin{Verbatim}[frame=single]
+all:    dummy
+        @echo "$@ depends on dummy"
+
+dummy:
+        touch $@
+\end{Verbatim}
+
+This is what make outputs when processing this `Makefile': 
+
+
+\begin{Verbatim}[frame=single]
+$ make
+touch dummy
+all depends on dummy
+\end{Verbatim}
+
+The GNU Make manual documents these macros in more detail. 
+
+\section{Suffix rules}
+
+
+To simplify a `Makefile', there is a special kind of rule syntax known as a suffix rule. This is a wildcard pattern that can match targets. Our first `Makefile' used some. Here is one: 
+
+\begin{Verbatim}[frame=single]
+.c.o:
+        $(CC) $(CFLAGS) -c $< -o $@
+\end{Verbatim}
+
+
+
+Unless a more specific rule matches the target being sought, this rule will match any target that ends in `.o'. These files are said to always be dependent on `.c'. With some background material now presented, let's take a look at these tools in use. 

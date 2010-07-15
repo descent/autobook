@@ -1,0 +1,147 @@
+\chapter{History}
+In this chapter we provide a brief history of the tools described in this book. You don't need to know this history in order to use the tools. However, the history of how the tools developed over time helps explain why the tools act the way that they do today. Also, in a book like this, it's only fair for us to credit the original authors and sources of inspiration, and to explain what they did. 
+
+\section{The Diversity of Unix Systems}
+
+
+Of the programs discussed in this book, the first to be developed was Autoconf. Its development was determined by the history of the Unix operating system. 
+
+
+The first version of Unix was written by Dennis Ritchie and Ken Thompson at Bell Labs in 1969. During the 1970s, Bell Labs was not permitted to sell Unix commercially, but did distribute Unix to universities at relatively low cost. The University of California at Berkeley added their own improvements to the Unix sources; the result was known as the BSD version of Unix. 
+
+
+In the early 1980s, AT\&T signed an agreement permitting them to sell Unix commercially. The first AT\&T version of Unix was known as System III. 
+
+
+As the popularity of Unix increased during the 1980s, several other companies modified the Unix sources to create their own variants. Examples include SunOS from Sun Microsystems, Ultrix from Digital Equipment Corporation, and HP-UX from Hewlett Packard. 
+
+
+Although all of the Unix variants were fundamentally similar, there were various differences between them. They had slightly different sets of header files and slightly different lists of functions in the system libraries, as well as more significant differences in areas such as terminal handling and job control. 
+
+
+The emerging POSIX standards helped to eliminate some of these differences. However, in some areas POSIX introduced new features, leading to more variants. Also, different systems adopted the POSIX standard at different times, leading to further disparities. 
+
+
+All of these variations caused problems for programs distributed as source code. Even a function as straightforward as memcpy was not available everywhere; the BSD system library provided the similar function bcopy instead, but the order of arguments was reversed. 
+
+
+Program authors who wanted their programs to run on a wide variety of Unix variants had to be familiar with the detailed differences between the variants. They also had to worry about the ways in which the variants changed from one version to another, as variants on the one hand converged on the POSIX standard and on the other continued to introduce new and different features. 
+
+
+While it was generally possible to use \#ifdef to identify particular systems and versions, it became increasingly difficult to know which versions had which features. It became clear that some more organized approach was needed to handle the differences between Unix variants. 
+
+\section{The First Configure Programs}
+By 1992, four different systems had been developed to help with source code portability: 
+
+\begin{itemize}
+\item The Metaconfig program, by Larry Wall, Harlan Stenn, and Raphael Manfredi. 
+\item The Cygnus `configure' script, by K. Richard Pixley, and the original GCC `configure' script, by Richard Stallman. These are quite similar, and the developers communicated regularly. GCC is the GNU Compiler Collection, formerly the GNU C compiler. 
+\item The GNU Autoconf package, by David MacKenzie. 
+\item Imake, part of the X Window system. 
+\end{itemize}
+
+These systems all split building a program into two steps: a configuration step, and a build step. For all the systems, the build step used the standard Unix make program. The make program reads a set of rules in a `Makefile', and uses them to build a program. The configuration step would generate `Makefile's, and perhaps other files, which would then be used during the build step. 
+
+
+Metaconfig and Autoconf both use feature tests to determine the capabilities of the system. They use Bourne shell scripts (all variants of Unix support the Bourne shell in one form or another) to run various tests to see what the system can support. 
+
+
+The Cygnus `configure' script and the original GCC `configure' script are also Bourne shell scripts. They rely on little configuration files for each system variant, both header files and `Makefile' fragments. In early versions, the user compiling the program had to tell the script which type of system the program should be built for; they were later enhanced with a shell script written by Per Bothner which determines the system type based on the standard Unix uname program and other information. 
+
+
+Imake is a portable C program. Imake can be customized for a particular system, and run as part of building a package. However, it is more normally distributed with a package, including all the configuration information needed for supported systems. 
+
+
+Metaconfig and Autoconf are programs used by program authors. They produce a shell script which is distributed with the program's source code. A user who wants to build the program runs the shell script in order to configure the source code for the particular system on which it is to be built. 
+
+
+The Cygnus and GCC `configure' scripts, and imake, do not have this clear distinction between use by the developer and use by the user. 
+
+
+The Cygnus and GCC `configure' scripts included features to support cross development, both to support building a cross-compiler which compiles code to be run on another system, and to support building a program using a cross-compiler. 
+
+
+Autoconf, Metaconfig and Imake did not have these features (they were later added to Autoconf); they only worked for building a program on the system on which it was to run. 
+
+
+The scripts generated by Metaconfig are interactive by default: they ask questions of the user as they go along. This permits them to determine certain characteristics of the system which it is difficult or impossible to test, such as the behavior of setuid programs. 
+
+
+The Cygnus and GCC `configure' scripts, and the scripts generated by autoconf, and the imake program, are not interactive: they determine everything themselves. When using Autoconf, the package developer normally writes the script to accept command line options for features which can not be tested for, or sometimes requires the user to edit a header file after the `configure' script has run. 
+
+\section{Configure Development}
+
+
+The Cygnus `configure' script and the original GCC `configure' script both had to be updated for each new Unix variant they supported. This meant that packages which used them were continually out of date as new Unix variants appeared. It was not hard for the developer to add support for a new system variant; however, it was not something which package users could easily do themselves. 
+
+
+The same was true of Imake as it was commonly used. While it was possible for a user to build and configure Imake for a particular system, it was not commonly done. In practice, packages such as the X window system which use Imake are shipped with configuration information detailed for specific Unix variants. 
+
+
+Because Metaconfig and Autoconf used feature tests, the scripts they generated were often able to work correctly on new Unix variants without modification. This made them more flexible and easier to work with over time, and led to the wide adoption of Autoconf. 
+
+
+In 1994, David MacKenzie extended Autoconf to incorporate the features of the Cygnus `configure' script and the original GCC `configure' script. This included support for using system specified header file and makefile fragments, and support for cross-compilation. 
+
+
+GCC has since been converted to use Autoconf, eliminating the GCC `configure' script. Most programs which use the Cygnus `configure' script have also been converted, and no new programs are being written to use the Cygnus `configure' script. 
+
+
+The metaconfig program is still used today to configure Perl and a few other programs. imake is still used to configure the X window system. However, these tools are not generally used for new packages.
+
+\section{Automake Development}
+
+
+By 1994, Autoconf was a solid framework for handling the differences between Unix variants. However, program developers still had to write large `Makefile.in' files in order to use it. The `configure' script generated by autoconf would transform the `Makefile.in' file into a `Makefile' used by the make program. 
+
+
+A `Makefile.in' file has to describe how to build the program. In the Imake equivalent of a `Makefile.in', known as an `Imakefile', it is only necessary to describe which source files are used to build the program. When Imake generates a `Makefile', it adds the rules for how to build the program itself. Later versions of the BSD make program also include rules for building a program. 
+
+
+Since most programs are built in much the same way, there was a great deal of duplication in `Makefile.in' files. Also, the GNU project developed a reasonably complex set of standards for `Makefile's, and it was easy to get some of the details wrong. 
+
+
+These factors led to the development of Automake. automake, like autoconf, is a program run by a developer. The developer writes files named `Makefile.am'; these use a simpler syntax than ordinary `Makefile's. automake reads the `Makefile.am' files and produces `Makefile.in' files. The idea is that a script generated by autoconf converts these `Makefile.in' files into `Makefile's. 
+
+
+As with Imake and BSD make, the `Makefile.am' file need only describe the files used to build a program. automake automatically adds the necessary rules when it generates the `Makefile.in' file. automake also adds any rules required by the GNU `Makefile' standards. 
+
+
+The first version of Automake was written by David MacKenzie in 1994. It was completely rewritten in 1995 by Tom Tromey.
+
+\section{Libtool Development}
+
+
+Over time, Unix systems added support for shared libraries. 
+
+
+Conventional libraries, or static libraries, are linked into a program image. This means that each program which uses a static library includes some or all of the library in the program binary on disk. 
+
+
+Shared libraries, on the other hand, are a separate file. A program which uses a shared library does not include a copy of the library; it only includes the name of the library. Many programs can use a single shared library. 
+
+
+Using a shared library reduces disk space requirements. Since the system can generally share a single executable instance of the shared library among many programs, it also reduces swap space requirements at run time. Another advantage is that it is possible to fix a bug by updating the single shared library file on disk, without requiring all the programs which use the library to be rebuilt. 
+
+
+The first Unix shared library implementation was in System V release 3 from AT\&T. The idea was rapidly adopted by other Unix vendors, appearing in SunOS, HP-UX, AIX, and Digital Unix among others. Unfortunately, each implementation differed in the creation and use of shared libraries and in the specific features which were supported. 
+
+
+Naturally, packages distributed as source code which included libraries wanted to be able to build their own shared libraries. Several different implementations were written in the Autoconf/Automake framework. 
+
+
+In 1996, Gordon Matzigkeit began work on a package known as Libtool. Libtool is a collection of shell scripts which handle the differences between shared library generation and use on different systems. It is closely tied to Automake, although it is possible to use it independently. 
+
+
+Over time, Libtool has been enhanced to support more Unix variants and to provide an interface for standardizing shared library features.
+
+\section{Microsoft Windows}
+
+
+In 1995, Microsoft released Windows 95, which soon became the most widely-used operating system in the world. Autoconf and Libtool were written to support portability across Unix variants, but they provided a framework to support portability to Windows as well. This made it possible for a program to support both Unix and Windows from a single source code base. 
+
+
+The key requirement of both Autoconf and Libtool was the Unix shell. The GNU bash shell was ported to Windows as part of the Cygwin project, which was originally written by Steve Chamberlain. The Cygwin project implements the basic Unix API in Windows, making it possible to port Unix programs directly. 
+
+
+Once the shell and the Unix make program (also provided by Cygwin) were available, it was possible to make Autoconf and Libtool support Windows directly, using either the Cygwin interface or the Visual C++ tools from Microsoft. This involved handling details like the different file extensions used by the different systems, as well as yet another set of shared library features. This first version of this work was by Ian Lance Taylor in 1998. Automake has also been ported to Windows. It requires Perl to be installed (see section A.1 Prerequisite tools). 

@@ -1,0 +1,402 @@
+\chapter{Autoconf Macro Reference}
+
+This is an alphabetical list of each Autoconf macro used in this book, along with a description of what each does. They are provided for your reference while reading this book. The descriptions are only brief; see the appropriate reference manual for a complete description. 
+
+
+\begin{description}
+\item[AC\_{}ARG\_{}ENABLE](feature, help-text, [if-given], [if-not-given])
+
+    This macro allows the maintainer to specify additional package options accepted by `configure'\verb+--+for example, `\verb+--+enable-zlib'. The action shell code may access any arguments to the option in the shell variable enableval. For example, `\verb+--+enable-buffers=128' would cause `configure' to set enableval to `128'.
+
+\item[AC\_{}ARG\_{}PROGRAM]
+\
+
+    This macro places a sed transformation program into the output variable program\_{}transform\_{}name that can be used to transform the filenames of installed programs. If the `\verb+--+program-prefix', `\verb+--+program-suffix' or
+    `\verb+--+program-transform-name' options are passed to `configure', an appropriate transformation program will be generated. If no options are given, but the type of the host system differs from the type of the target system, program names are transformed by prefixing them with the type of the target (eg. arm-elf-gcc).
+
+\item[AC\_{}ARG\_{}WITH](package, help-text, [if-given], [if-not-given])
+
+    This macro allows the maintainer to specify additional packages that this package should work with (for example, a library to manipulate shadow passwords). The user indicates this preference by invoking `configure' with an option such as `\verb+--+with-shadow'. If an optional argument is given, this value is available to shell code in the shell variable withval.
+
+\item[AC\_{}CACHE\_{}CHECK](message, cache-variable, commands)
+
+    This macro is a convenient front-end to the AC\_{}CACHE\_{}VAL macro that takes care of printing messages to the user, including whether or not the result was found in the cache. It should be used in preference to AC\_{}CACHE\_{}VAL.
+
+\item[AC\_{}CACHE\_{}VAL(cache-variable, commands)]
+\
+
+    This is a low-level macro which implements the Autoconf cache feature. If the named variable is set at runtime (for instance, if it was read from `config.cache'), then this macro does nothing. Otherwise, it runs the shell code in commands, which is assumed to set the cache variable.
+
+\item[AC\_{}CANONICAL\_{}HOST]
+\
+
+    This macro determines the type of the host system and sets the output variable `host', as well as other more obscure variables.
+
+\item[AC\_{}CANONICAL\_{}SYSTEM]
+\
+
+    This macro determines the type of the build, host and target systems and sets the output variables `build', `host' and `target', amongst other more obscure variables.
+
+\item[AC\_{}CHECK\_{}FILE(file, [if-found], [if-not-found])]
+\
+
+    This macro tests for the existence of a file in the file system of the build system, and runs the appropriate shell code depending on whether or not the file is found.
+
+\item[AC\_{}CHECK\_{}FUNCS](function-list, [if-found], [if-not-found])
+
+    This looks for a series of functions. If the function quux is found, the C preprocessor macro HAVE\_{}QUUX will be defined. In addition, if the if-found argument is given, it will be run (as shell code) when a function is found \verb+--+ this code can use the sh break command to prevent AC\_{}CHECK\_{}FUNCS from looking for the remaining functions in the list. The shell code in if-not-found is run if a function is not found.
+
+\item[AC\_{}CHECK\_{}HEADER(header, [if-found], [if-not-found])]
+\
+
+    This macro executes some specified shell code if a header file exists. If it is not present, alternative shell code is executed instead.
+
+\item[AC\_{}CHECK\_{}HEADERS](header-list, [if-found], [if-not-found])
+
+    This looks for a series of headers. If the header quux.h is found, the C preprocessor macro HAVE\_{}QUUX\_{}H will be defined. In addition, if the if-found argument is given, it will be run (as shell code) when a header is found \verb+--+ this code can use the sh break command to prevent AC\_{}CHECK\_{}HEADERS from looking for the remaining headers in the list. The shell code in if-not-found is run if a header is not found.
+
+\item[AC\_{}CHECK\_{}LIB](library, function, [if-found], [if-not-found], [other-libraries])
+
+    This looks for the named function in the named library specified by its base name. For instance the math library, `libm.a', would be named simply `m'. If the function is found in the library `foo', then the C preprocessor macro HAVE\_{}LIBFOO is defined.
+
+\item[AC\_{}CHECK\_{}PROG](variable, program-name, value-if-found, [value-if-not-found], [path], [reject])
+
+    Checks to see if the program named by program-name exists in the path path. If found, it sets the shell variable variable to the value value-if-found; if not it uses the value value-if-not-found. If variable is already set at runtime, this macro does nothing.
+
+\item[AC\_{}CHECK\_{}SIZEOF](type, [size-if-cross-compiling])
+
+    This macro determines the size of C and C++ built-in types and defines SIZEOF\_{}type to the size, where type is transformed\verb+--+all characters to upper case, spaces to underscores and `*' to `P'. If the type is unknown to the compiler, the size is set to 0. An optional argument specifies a default size when cross-compiling. The `configure' script will abort with an error message if it tries to cross-compile without this default size.
+
+\item[AC\_{}CONFIG\_{}AUX\_{}DIR(directory)]
+\
+
+    This macro allows an alternative directory to be specified for the location of auxiliary scripts such as `config.guess', `config.sub' and `install-sh'. By default, `\$srcdir', `\$srcdir/..' and `\$srcdir/../..' are searched for these files.
+
+\item[AC\_{}CONFIG\_{}HEADER(header-list)]
+\
+
+This indicates that you want to use a config header, as opposed to having 
+all the C preprocessor macros defined via -D options in the 
+DEFS `Makefile' variable. Each header named in header-list is created 
+at runtime by `configure' (via AC\_{}OUTPUT). There are a variety of 
+optional features for use with config headers (different naming schemes 
+and so forth); see the reference manual for more information.
+
+\item[AC\_{}C\_{}CONST]
+\
+
+    This macro defines the C preprocessor macro const to the string const if the C compiler supports the const keyword. Otherwise it is defined to be the empty string.
+
+\item[AC\_{}C\_{}INLINE]
+\
+
+    This macro tests if the C compiler can accept the inline keyword. It defines the C preprocessor macro inline to be the keyword accepted by the compiler or the empty string if it is not accepted at all.
+
+\item[AC\_{}DEFINE(variable, [value], [description])]
+\
+
+    This is used to define C preprocessor macros. The first argument is the name of the macro to define. The value argument, if given, is the value of the macro. The final argument can be used to avoid adding an `\#undef' for the macro to `acconfig.h'.
+
+\item[AC\_{}DEFINE\_{}UNQUOTED(variable, [value], [description])]
+\
+
+    This is like AC\_{}DEFINE, but it handles the quoting of value differently. This macro is used when you want to compute the value instead of having it used verbatim.
+
+\item[AC\_{}DEFUN(name, body)]
+\
+
+    This macro is used to define new macros. It is similar to M4's define macro, except that it performs additional internal functions.
+
+\item[AC\_{}DISABLE\_{}FAST\_{}INSTALL]
+\
+
+    This macro can be used to disable Libtool's `fast install' feature.
+
+\item[AC\_{}DISABLE\_{}SHARED]
+\
+
+    This macro changes the default behavior of AC\_{}PROG\_{}LIBTOOL so that shared libraries will not be built by default. The user can still override this new default by using `\verb+--+enable-shared'.
+
+\item[AC\_{}DISABLE\_{}STATIC]
+\
+
+    This macro changes the default behavior of AC\_{}PROG\_{}LIBTOOL so that static libraries will not be built by default. The user can still override this new default by using `\verb+--+enable-static'.
+
+\item[AC\_{}EXEEXT]
+\
+
+    Sets the output variable EXEEXT to the extension of executables produced by the compiler. It is usually set to the empty string on Unix systems and `.exe' on Windows.
+
+\item[AC\_{}FUNC\_{}ALLOCA]
+\
+
+    This macro defines the C preprocessor macro HAVE\_{}ALLOCA if the various tests indicate that the C compiler has built-in alloca support. If there is an `alloca.h' header file, this macro defines HAVE\_{}ALLOCA\_{}H. If, instead, the alloca function is found in the standard C library, this macro defines C\_{}ALLOCA and sets the output variable ALLOCA to alloca.o.
+
+\item[AC\_{}FUNC\_{}GETPGRP]
+\
+
+    This macro tests if the getpgrp function takes a process ID as an argument or not. If it does not, the C preprocessor macro GETPGRP\_{}VOID is defined.
+
+\item[AC\_{}FUNC\_{}MEMCMP]
+\
+
+    This macro tests for a working version of the memcmp function. If absent, or it does not work correctly, `memcmp.o' is added to the LIBOBJS output variable.
+
+\item[AC\_{}FUNC\_{}MMAP]
+\
+
+    Defines the C preprocessor macro HAVE\_{}MMAP if the mmap function exists and works.
+
+\item[AC\_{}FUNC\_{}SETVBUF\_{}REVERSED]
+\
+
+    On some systems, the order of the mode and buf arguments is reversed with respect to the ANSI C standard. If so, this macro defines the C preprocessor macro SETVBUF\_{}REVERSED.
+
+\item[AC\_{}FUNC\_{}UTIME\_{}NULL]
+\
+
+    Defines the C preprocessor macro HAVE\_{}UTIME\_{}NULL if a call to utime with a NULL utimbuf pointer sets the file's timestamp to the current time.
+
+\item[AC\_{}FUNC\_{}VPRINTF]
+\
+
+    Defines the C preprocessor macro HAVE\_{}VPRINTF if the vprintf function is available. If not and the \_{}doprnt function is available instead, this macro defines HAVE\_{}DOPRNT.
+
+\item[AC\_{}HEADER\_{}DIRENT]
+\
+
+    This macro searches a number of specific header files for a declaration of the C type DIR. Depending on which header file the declaration is found in, this macro may define one of the C preprocessor macros HAVE\_{}DIRENT\_{}H, HAVE\_{}SYS\_{}NDIR\_{}H, HAVE\_{}SYS\_{}DIR\_{}H or HAVE\_{}NDIR\_{}H. Refer to the Autoconf manual for an example of how these macros should be used in your source code.
+
+\item[AC\_{}HEADER\_{}STDC]
+\
+
+    This macro defines the C preprocessor macro STDC\_{}HEADERS if the system has the ANSI standard C header files. It determines this by testing for the existence of the `stdlib.h', `stdarg.h', `string.h' and `float.h' header files and testing if `string.h' declares memchr, `stdlib.h' declares free, and `ctype.h' macros such as isdigit work with 8-bit characters.
+
+\item[AC\_{}INIT(filename)]
+\
+
+    This macro performs essential initialization for the generated `configure' script. An optional argument may provide the name of a file from the source directory to ensure that the directory has been specified correctly.
+
+\item[AC\_{}LIBTOOL\_{}DLOPEN]
+\
+
+    Call this macro before AC\_{}PROG\_{}LIBTOOL to indicate that your package wants to use Libtool's support for dlopened modules.
+
+\item[AC\_{}LIBTOOL\_{}WIN32\_{}DLL]
+\
+
+    Call this macro before AC\_{}PROG\_{}LIBTOOL to indicate that your package has been written to build DLLs on Windows. If this macro is not called, Libtool will only build static libraries on Windows.
+
+\item[AC\_{}LIB\_{}LTDL]
+\
+
+    This macro does the configure-time checks needed to cause `ltdl.c' to be compiled correctly. That is, this is used to enable dynamic loading via libltdl.
+
+\item[AC\_{}LINK\_{}FILES(source-list, dest-list)]
+\
+
+    Use this macro to create a set of links; if possible, symlinks are made. The two arguments are parallel lists: the first element of dest-list is the name of a to-be-created link whose target is the first element of source-list.
+
+\item[AC\_{}MSG\_{}CHECKING(message)]
+\
+
+    This macro outputs a message to the user in the usual style of `configure' scripts: leading with the word `checking' and ending in `...'. This message gives the user an indication that the `configure' script is still working. A subsequent invocation of AC\_{}MSG\_{}RESULT should be used to output the result of a test.
+
+\item[AC\_{}MSG\_{}ERROR(message)]
+\
+
+    This macro outputs an error message to standard error and aborts the `configure' script. It should only be used for fatal error conditions.
+
+\item[AC\_{}MSG\_{}RESULT(message)]
+\
+
+This macro should be invoked after a corresponding invocation of 
+AC\_{}MSG\_{}CHECKING with the result of a test. Often the 
+result string can be as simple as `yes' or `no'.
+
+\item[AC\_{}MSG\_{}WARN(message)]
+\
+
+    This macro outputs a warning to standard error, but allows the `configure' script to continue. It should be used to notify the user of abnormal, but non-fatal, conditions.
+
+\item[AC\_{}OBJEXT]
+\
+
+    Sets the output variable OBJEXT to the extension of object files produced by the compiler. Usually, it is set to `.o' on Unix systems and `.obj' on Windows.
+
+\item[AC\_{}OUTPUT(files, [extra-commands], [init-commands])]
+\
+
+    This macro must be called at the end of every `configure.in'. It creates each file listed in files. For a given file, by default, configure reads the template file whose name is the name of the input file with `.in' appended \verb+--+ for instance, `Makefile' is generated from `Makefile.in'. This default can be overridden by using a special naming convention for the file.
+
+    For each name `foo' given as an argument to AC\_{}SUBST, configure will replace any occurrence of `@foo@' in the template file with the value of the shell variable `foo' in the generated file. This macro also generates the config header, if AC\_{}CONFIG\_{}HEADER was called, and any links, if AC\_{}LINK\_{}FILES was called. The additional arguments can be used to further tailor the output processing.
+
+\item[AC\_{}OUTPUT\_{}COMMANDS(extra-commands, [init-commands])]
+\
+
+    This macro works like the optional final arguments of AC\_{}OUTPUT, except that it can be called more than once from `configure.in'. (This makes it possible for macros to use this feature and yet remain modular.) See the reference manual for the precise definition of this macro.
+
+\item[AC\_{}PROG\_{}AWK]
+\
+
+    This macro searches for an awk program and sets the output variable AWK to be the best one it finds.
+
+\item[AC\_{}PROG\_{}CC]
+\
+
+    This checks for the C compiler to use and sets the shell variable CC to the value. If the GNU C compiler is being used, this sets the shell variable GCC to `yes'. This macro sets the shell variable CFLAGS if it has not already been set. It also calls AC\_{}SUBST on CC and CFLAGS.
+
+\item[AC\_{}PROG\_{}CC\_{}STDC]
+\
+
+This macro attempts to discover a necessary command line option to have 
+the C compiler accept ANSI C. If so, it adds the option to the CC. If 
+it was not possible to get the C compiler to accept ANSI, the shell 
+variable ac\_{}cv\_{}prog\_{}cc\_{}stdc will be set to `no'.
+
+\item[AC\_{}PROG\_{}CPP]
+    This macro sets the output variable CPP to a command that runs the C preprocessor. If `\$CC -E' does not work, it will set the variable to `/lib/cpp'.
+
+\item[AC\_{}PROG\_{}CXX]
+    This is like AC\_{}PROG\_{}CC, but it checks for the C++ compiler, and sets the variables CXX, GXX and CXXFLAGS.
+
+\item[AC\_{}PROG\_{}GCC\_{}TRADITIONAL]
+\
+
+    This macro determines if GCC requires the `-traditional' option in order to compile code that uses ioctl and, if so, adds `-traditional' to the CC output variable. This condition is rarely encountered, thought mostly on old systems.
+
+\item[AC\_{}PROG\_{}INSTALL]
+\
+
+    This looks for an install program and sets the output variables INSTALL, INSTALL\_{}DATA, INSTALL\_{}PROGRAM, and INSTALL\_{}SCRIPT. This macro assumes that if an install program cannot be found on the system, your package will have `install-sh' available in the directory chosen by AC\_{}CONFIG\_{}AUX\_{}DIR.
+
+\item[AC\_{}PROG\_{}LEX]
+\
+
+    This looks for a lex-like program and sets the `Makefile' variable LEX to the result. It also sets LEXLIB to whatever might be needed to link against lex output.
+
+\item[AC\_{}PROG\_{}LIBTOOL]
+\
+
+    This macro is the primary way to integrate Libtool support into `configure'. If you are using Libtool, you should call this macro in `configure.in'. Among other things, it adds support for the `\verb+--+enable-shared' configure flag.
+
+\item[AC\_{}PROG\_{}LN\_{}S]
+\
+
+    This sets the `Makefile' variable LN\_{}S to `ln -s' if symbolic links work in the current working directory. Otherwise it sets LN\_{}S to just `ln'.
+
+\item[AC\_{}PROG\_{}MAKE\_{}SET]
+\
+
+    Some versions of make need to have the `Makefile' variable MAKE set in `Makefile' in order for recursive builds to work. This macro checks whether this is needed, and, if so, it sets the `Makefile' variable SET\_{}MAKE to the result. AM\_{}INIT\_{}AUTOMAKE calls this macro, so if you are using Automake, you don't need to call it or use SET\_{}MAKE in `Makefile.am'.
+
+\item[AC\_{}PROG\_{}RANLIB]
+\
+
+    This searches for the ranlib program. It sets the `Makefile' variable RANLIB to the result. If ranlib is not found, or not needed on the system, then the result is :.
+
+\item[AC\_{}PROG\_{}YACC]
+\
+
+    This searches for the yacc program \verb+--+ it tries bison, byacc, and yacc. It sets the `Makefile' variable YACC to the result.
+
+\item[AC\_{}REPLACE\_{}FUNCS(function list)]
+\
+
+    This macro takes a single argument, which is a list of functions. For a given function `func', `configure' will do a link test to try to find it. If the function cannot be found, then `func.o' will be added to LIBOBJS. If function can be found, then `configure' will define the C preprocessor symbol HAVE\_{}FUNC.
+
+\item[AC\_{}REQUIRE(macro-name)]
+\
+
+    This macro takes a single argument, which is the name of another macro. (Note that you must quote the argument correctly: AC\_{}REQUIRE([FOO]) is correct, while AC\_{}REQUIRE(FOO) is not.) If the named macro has already been invoked, then AC\_{}REQUIRE does nothing. Otherwise, it invokes the named macro with no arguments.
+
+\item[AC\_{}REVISION(revision)]
+\
+
+    This macro takes a single argument, a version string. Autoconf will copy this string into the generated `configure' file.
+
+\item[AC\_{}STRUCT\_{}ST\_{}BLKSIZE]
+\
+
+    Defines the C preprocessor macro HAVE\_{}ST\_{}BLKSIZE if struct stat has an st\_{}blksize member.
+
+\item[AC\_{}STRUCT\_{}ST\_{}BLOCKS]
+\
+
+    Defines the C preprocessor macro HAVE\_{}ST\_{}BLOCKS if struct stat has an st\_{}blocks member.
+
+\item[AC\_{}STRUCT\_{}ST\_{}RDEV]
+\
+
+    Defines the C preprocessor macro HAVE\_{}ST\_{}RDEV if struct stat has an st\_{}rdev member.
+
+\item[AC\_{}STRUCT\_{}TM]
+\
+
+    This macro looks for struct tm in `time.h' and defines TM\_{}IN\_{}SYS\_{}TIME if it is not found there.
+
+\item[AC\_{}SUBST(name)]
+\
+
+    This macro takes a single argument, which is the name of a shell variable. When configure generates the files listed in AC\_{}OUTPUT (e.g., `Makefile'), it will substitute the variable's value (at the end of the configure run \verb+--+ the value can be changed after AC\_{}SUBST is called) anywhere a string of the form `@name@' is seen.
+
+\item[AC\_{}TRY\_{}COMPILE(includes, body, [if-ok], [if-not-ok])]
+\
+
+    This macro is used to try to compile a given function, whose body is given in body. includes lists any `\#include' statements needed to compile the function. If the code compiles correctly, the shell commands in if-ok are run; if not, if-not-ok is run. Note that this macro will not try to link the test program \verb+--+ it will only try to compile it.
+
+\item[AC\_{}TRY\_{}LINK(includes, body, [if-found], [if-not-found])]
+\
+
+    This is used like AC\_{}TRY\_{}COMPILE, but it tries to link the resulting program. The libraries and options in the LIBS shell variable are passed to the link.
+
+\item[AC\_{}TRY\_{}RUN(program, [if-true, [if-false], [if-cross-compiling])]
+\
+
+    This macro tries to compile and link the program whose text is in program. If the program compiles, links, and runs successfully, the shell code if-true is run. Otherwise, the shell code if-false is run. If the current configure is a cross-configure, then the program is not run, and on a successful compile and link, the shell code if-cross-compiling is run.
+
+\item[AC\_{}TYPE\_{}SIGNAL]
+\
+
+    This macro defines the C preprocessor macro RETSIGTYPE to be the correct return type of signal handlers. For instance, it might be `void' or `int'.
+
+\item[AC\_{}TYPE\_{}SIZE\_{}T]
+\
+
+    This macro looks for the type size\_{}t. If not defined on the system, it defines it (as a macro) to be `unsigned'.
+
+\item[AM\_{}CONDITIONAL(name, testcode)]
+\
+
+    This Automake macro takes two arguments: the name of a conditional and a shell statement that is used to determine whether the conditional should be true or false. If the shell code returns a successful (0) status, then the conditional will be true. Any conditional in your `configure.in' is automatically available for use in any `Makefile.am' in that project.
+
+\item[AM\_{}CONFIG\_{}HEADER(header)]
+\
+
+    This is just like AC\_{}CONFIG\_{}HEADER, but does some additional setup required by Automake. If you are using Automake, use this macro. Otherwise, use AC\_{}CONFIG\_{}HEADER.
+
+\item[AM\_{}INIT\_{}AUTOMAKE(package, version, [nodefine])]
+\
+
+    This macro is used to do all the standard initialization required by Automake. It has two required arguments: the package name and the version number. This macro sets and calls AC\_{}SUBST on the shell variables PACKAGE and VERSION. By default it also defines these variables (via AC\_{}DEFINE\_{}UNQUOTED). However, this macro also accepts an optional third argument which, if not empty, means that the AC\_{}DEFINE\_{}UNQUOTED calls for PACKAGE and VERSION should be suppressed.
+
+\item[AM\_{}MAINTAINER\_{}MODE]
+\
+
+    This macro is used to enable a special Automake feature, maintainer mode, which we've documented elsewhere (see section 5.3 Maintaining Input Files).
+
+\item[AM\_{}PROG\_{}CC\_{}STDC]
+\
+
+    This macro takes no arguments. It is used to try to get the C compiler to be ANSI compatible. It does this by adding different options known to work with various system compilers. This macro is most typically used in conjunction with Automake when you want to use the automatic de-ANSI-fication feature.
+
+\item[AM\_{}PROG\_{}LEX]
+\
+
+    This is like AC\_{}PROG\_{}LEX, but it does some additional processing used by Automake-generated `Makefile's. If you are using Automake, then you should use this. Otherwise, you should use AC\_{}PROG\_{}LEX (and perhaps AC\_{}DECL\_{}YYTEXT, which AM\_{}PROG\_{}LEX calls).
+
+\item[AM\_{}WITH\_{}DMALLOC]
+\
+
+    This macro adds support for the `\verb+--+with-dmalloc' flag to configure. If the user chooses to enable dmalloc support, then this macro will define the preprocessor symbol `WITH\_{}DMALLOC' and will add `-ldmalloc' to the `Makefile' variable `LIBS'.
+\end{description}

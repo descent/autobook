@@ -1,0 +1,89 @@
+\chapter{Installing GNU Autotools}
+
+The GNU Autotools may already be installed at your site, particularly if you are using a GNU/Linux system. If you don't have these tools installed, or do not have the most recent versions, this appendix will help you install them. 
+
+\section{Prerequisite tools}
+
+The GNU Autotools make use of a few additional tools to get their jobs done. This makes it necessary to gather all of the prerequisite tools to get started. Before installing GNU Autotools, it is necessary to obtain and install these tools.
+
+The GNU Autotools are all built around the assumption that the system will have a relatively functional version of the Bourne shell. If your system is missing a Bourne shell or your shell behaves different to most, as is the case with the Bourne shell provided with Ultrix, then you might like to obtain and install GNU bash. See section A.2 Downloading GNU Autotools, for details on obtaining GNU packages. If you are using a Windows system, the easiest way to obtain a Bourne shell and all of the shell utilities that you will need is to download and install Cygnus Solutions' Cygwin product. You can locate further information about Cygwin by reading http://www.cygnus.com/cygwin/.
+
+Autoconf requires GNU M4. Vendor-provided versions of M4 have proven to be troublesome, so Autoconf checks that GNU M4 is installed on your system. Again, see section A.2 Downloading GNU Autotools, for details on obtaining GNU packages such as M4. At the time of writing, the latest version is 1.4. Earlier versions of GNU M4 will work, but they may not be as efficient.
+
+Automake requires Perl version 5 or greater. You should download and install a version of Perl for your platform which meets these requirements. 
+
+\section{Downloading GNU Autotools}
+
+The GNU Autotools are distributed as part of the GNU project, under the terms of the GNU General Public License. Each tool is packaged in a compressed archive that you can retrieve from sources such as Internet FTP archives and CD-ROM distributions. While you may use any source that is convenient to you, it is best to use one of the recognized GNU mirror sites. A current list of mirror sites is listed at http://www.gnu.org/order/ftp.html.
+
+The directory layout of the GNU archives has recently been improved to make it easier to locate particular packages. The new scheme places package archive files under a subdirectory whose name reflects the base name of the package. For example, GNU Autoconf 2.13 can be found at: 
+
+\begin{Verbatim}[frame=single]
+/gnu/autoconf/autoconf-2.13.tar.gz
+\end{Verbatim}
+
+The filenames corresponding to the latest versions of GNU Autotools, at the time of writing, are:
+
+ 	
+\begin{Verbatim}[frame=single]
+autoconf-2.13.tar.gz
+automake-1.4.tar.gz
+libtool-1.3.5.tar.gz
+\end{Verbatim}
+
+These packages are stored as tar archives and compressed with the gzip compression utility. Once you have obtained all of these packages, you should unpack them using the following commands:
+
+\begin{Verbatim}[frame=single]
+gunzip TOOL-VERSION.tar.gz
+tar xfv TOOL-VERSION.tar
+\end{Verbatim}
+
+GNU tar archives are created with a directory name prefixed to all of the files in the archive. This means that files will be tidily unpacked into an appropriately named subdirectory, rather than being written all over your current working directory. 
+
+\section{Installing the tools}
+
+When installing GNU Autotools, it is a good idea to install the tools in the same location (eg. `/usr/local'). This allows the tools to discover each others' presence at installation time. The location shown in the examples below will be the default, `/usr/local', as this choice will make the tools available to all users on the system.
+
+Installing Autoconf is usually a quick and simple exercise, since Autoconf itself uses `configure' to prepare itself for building and installation. Automake and Libtool can be installed using the same steps as for Autoconf. As a matter of personal preference, I like to create a separate build tree when configuring packages to keep the source tree free of derived files such as object files. Applying what we know about invoking `configure' (see section 3. How to run configure and make), we can now configure and build Autoconf. The only `configure' option we're likely to want to use is `--prefix', so if you want to install the tools in another location, include this option on the command line. It might be desirable to install the package elsewhere when operating in networked environments. 
+
+\begin{verbatim}
+$ mkdir ac-build && cd ac-build
+$ ~/autoconf-2.13/configure 
+\end{verbatim}
+
+You will see `configure' running its tests and producing a `Makefile' in the build directory:
+
+\begin{Verbatim}[frame=single]
+  creating cache ./config.cache
+  checking for gm4... no
+  checking for gnum4... no
+  checking for m4... /usr/bin/m4
+  checking whether we are using GNU m4... yes
+  checking for mawk... no
+  checking for gawk... gawk
+  checking for perl... /usr/bin/perl
+  checking for a BSD compatible install... /usr/bin/install -c
+  updating cache ./config.cache
+  creating ./config.status
+  creating Makefile
+  creating testsuite/Makefile
+\end{Verbatim}
+
+To build Autoconf, type the following:
+
+ 	
+
+\begin{verbatim}
+$ make all
+\end{verbatim}
+
+Autoconf has no architecture-specific files to be compiled, so this process finishes quickly. To install files into `/usr/local', it may be necessary to become the root user before installing.
+
+ 	
+
+\begin{verbatim}
+# make install
+\end{verbatim}
+
+Autoconf is now installed on your system. 
+

@@ -1,0 +1,810 @@
+\chapter{Using GNU libltdl}\label{C_Using_GNU_libltdl}
+
+Now that you are conversant with the mechanics and advantages of using dynamic run time modules in your projects, you can probably already imagine a hundred and one uses for a plugin architecture. As I described in the last chapter, there are several gratuitously different architecture dependent dynamic loading APIs, and yet several more shortcomings in many of those.
+
+If you have Libtool installed on your machine, then you almost certainly have libltdl which has shipped as part of the standard Libtool distribution since release 1.3.In this chapter I will describe GNU libltdl, the LibTool Dynamic Loading library, and explain some of its features and how to make use of them. 
+
+\section{Introducing libltdl}
+
+Probably the best known and supported Unix run time linking API is the `dlopen' interface, used by Solaris and GNU/Linux amongst others, and discussed earlier in 17. Dynamic Loading. libltdl is based on the `dlopen' API, with a few small differences and several enhancements.
+
+The following libltdl API functions are declared in `ltdl.h': 
+
+\begin{description}
+\item[Function: lt\_{}dlhandle lt\_{}dlopen (const char *filename)]
+\
+
+    This function brings the code from a named module into the address space of the running program that calls it, and returns a handle which is used by the other API functions. If filename is not an absolute path, libltdl will search for it in directories named in the `LTDL\_{}LIBRARY\_{}PATH' environment variable, and then in the standard library directories before giving up. It is safe to call this function many times, libltdl will keep track of the number of calls made, but will require the same number of calls to `lt\_{}dlclose' to actually unload the module. 
+
+\item[Function: lt\_{}ptr\_{}t lt\_{}dlsym (lt\_{}dlhandle handle, const char *name)]
+\
+
+    Returns the address of the named symbol in the module which returned handle when it was lt\_{}dlopened. You must cast the returned address to a known type before using it. 
+
+\item[Function: int lt\_{}dlclose (lt\_{}dlhandle handle)]
+\
+
+    When you are finished with a particular module, it can be removed from memory using this function. 
+
+\item[Function: const char * lt\_{}dlerror (void)]
+\
+
+    If any of the libltdl API calls fail, this function returns a string which describes the last error that occured. 
+\end{description}
+
+In order to use these functions, you must \#include $<$ltdl.h$>$ for the function prototypes, and link with `-lltdl' to provide the API implementation. Assuming you link your application with libtool, and that you call the necessary macros from your `configure.in' (see section 18.2 Using libltdl), then any host specific dependent libraries (for example, `libdl' on GNU/Linux) will automatically be added to the final link line by libtool.
+
+You don't limit yourself to using only Libtool compiled modules when you use 
+libltdl. By writing the module loader carefully, it will be able to load 
+native modules too--although you will not be able to preload non-Libtool 
+modules (see section \ref{S_dlpreopen_Loading} dlpreopen Loading, page \pageref{S_dlpreopen_Loading}). The loader in Module Loader is written in this way. It is useful to be able to load modules flexibly like this, because you don't tie your users into using Libtool for any modules they write.
+
+Compare the descriptions of the functions above with the API descibed in 17.2 Module Access Functions. You will notice that they are very similar. 
+
+\begin{quote}
+Back-linking is the process of resolving any remaining symbols by referencing back into the application that loads the library at runtime -- a mechanism implemented on almost all modern Unices.
+
+For instance, your main application may provide some utility function, `my\_{}function', which you want a module to have access to. There are two ways to do that: 
+\end{quote}
+
+\begin{itemize}
+\item You could use Libtool to link your application, using the `-export-dynamic' option to ensure that the global application symbols are available to modules. When libltdl loads a module into an application compiled like this, it will back-link symbols from the application to resolve any otherwise undefined symbols in a module. When the module is `ltdlopen'ed, libltdl will arrange for calls to `my\_{}function' in the module, to execute the `my\_{}function' implementation in the application.
+
+      If you have need of this functionality, relying on back-linking is the simplest way to achieve it. Unfortunately, this simplicity is at the expense of portability: some platforms have no support for back-linking at all, and others will not allow a module to be created with unresolved symbols. Never-the-less, libltdl allows you to do this if you want to.
+
+\item You could split the code that implements the symbols you need to share with modules into a separate library. This library would then be used to resolve the symbols you wish to share, by linking it into modules and application alike. The definition of `my\_{}function' would be compiled separately into a library, `libmy\_{}function.la'. References to `my\_{}function' from the application would be resolved by linking it with `libmy\_{}function.la', and the library would be installed so that modules which need to call `my\_{}function' would be able to resolve the symbol by linking with `-lmy\_{}function'.
+
+      This method requires support for neither back-linking nor unresolved link time symbols from the host platform. The disadvantage is that when you realise you need this functionality, it may be quite complicated to extract the shared functionality from the application to be compiled in a stand alone library. 
+\end{itemize}
+
+On those platforms which support back-linking, libltdl can be configured to resolve external symbol references in a dynamic module with any global symbols already present in the main application. This has two implications for the libltdl API:
+
+\begin{itemize}
+\item There is no need to pass `RTLD\_{}GLOBAL' (or equivalent) to lt\_{}dlopen as might be necessary with the native module loading API.
+
+\item You should be aware that your application will not work on some platforms--most notably, Windows and AIX---if you rely on a back-linking. 
+\end{itemize}
+
+Similarly, there is no need to specify whether the module should be integrated into the application core before lt\_{}dlopen returns, or else when the symbols it provides are first referenced. libltdl will use lazy loading if it is supported, since this is a slight performance enhancement, or else fall back to loading everything immediately. Between this feature and the support of back-linking, there is no need to pass flags into lt\_{}dlopen as there is with most native dlopen APIs.
+
+There are a couple of other important API functions which you will need when using libltdl: 
+
+\begin{description}
+\item[Function: int lt\_{}dlinit (void)]
+\
+
+    You must call this function to initialise libltdl before calling any of the other libltdl API functions. It is safe to call this function many times, libltdl will keep track of the number of calls made, but will require the same number of calls to `lt\_{}dlexit' to actually recycle the library resources. If you don't call `lt\_{}dlinit' before any other API call, the other calls, including `lt\_{}dlerror', will return their respective failure codes (`NULL' or `1', as appropriate). 
+
+\item[Function: int lt\_{}dlexit (void)]
+\
+
+    When you are done with libltdl and all dynamic modules have been unloaded you can call this function to finalise the library, and recycle its resources. If you forget to unload any modules, the call to `lt\_{}dlexit' will `lt\_{}dlclose' them for you. 
+\end{description}
+
+Another useful departure that the libltdl API makes from a vanilla dlopen 
+implementation is that it also will work correctly with old K\&R C 
+compilers, by virtue of not relying on `void *' pointers. libltdl uses 
+lt\_{}dlhandles to pass references to loaded modules, and this also improves 
+ANSI C compiler's type checking compared to the untyped addresses typically 
+used by native dlopen APIs.
+
+\section{Using libltdl}
+
+Various aspects of libltdl are addressed in the following subsections,
+starting with a step by step guide to adding libltdl to your own GNU 
+Autotools projects (see section Configury) and an explanation of how to 
+initialise libltdl's memory management (see section Memory Management).
+After this comes a simple libltdl module loader which you can use as the 
+basis for a module loader in your own projects (see section Module Loader),
+including an explanation of how libltdl finds and links any native dynamic 
+module library necessary for the host platform. The next subsection
+(see section Dependent Libraries) deals with the similar problem of dynamic 
+modules which depend on other libraries -- take care not to confuse the 
+problems discussed in the previous two subsections. Following that, the source 
+code for and use of a simple dynamic module for use with this section'
+s module loader is detailed (see section Dynamic Module). 
+
+\subsection{Configury}
+
+Because libltdl supports so many different platforms(40) it needs to be configured for the host platform before it can be used. 
+
+\begin{quote}
+The path of least resistance to successfully integrating libltdl into your own project, dictates that the project use Libtool for linking its module loader with libltdl. This is certainly the method I use and recommend, and is the method discussed in this chapter. However, I have seen projects which did not use Libtool (specifically because Libtool's poor C++ support made it difficult to adopt), but which wanted the advantages of libltdl. It is possible to use libltdl entirely without Libtool, provided you take care to use the configuration macros described here, and use the results of those running these macros to determine how to link your application with libltdl.
+\end{quote}
+
+The easiest wat to add libltdl support to your own projects is with the following simple steps:
+
+\begin{enumerate}
+\item You must add the libltdl sources to your project distribution. If you are not already using Libtool in some capacity for your project, you should add `AC\_{}PROG\_{}LIBTOOL'(41) to your `configure.in'. That done, move to the top level directory of the project, and execute:
+
+ 	
+\begin{Verbatim}[frame=single]
+$ libtoolize --ltdl
+$ ls -F
+aclocal.m4    configure.in    libltdl/
+$ ls libltdl/
+COPYING.LIB   README         aclocal.m4    configure.in   
+Makefile.am   acconfig.h     config.h.in   ltdl.c  
+Makefile.in   acinclude.m4   configure     ltdl.h 
+stamp-h.in
+\end{Verbatim}
+
+\item libltdl has its own configuration to run in addition to the configuration for your project, so you must be careful to call the subdirectory configuration from your top level `configure.in':
+
+\begin{Verbatim}[frame=single]
+AC_CONFIG_SUBDIRS(libltdl)
+\end{Verbatim}
+
+And you must ensure that Automake knows that it must descend into the libltdl source directory at make time, by adding the name of that subdirectory to the `SUBDIRS' macro in your top level `Makefile.am':
+
+\begin{Verbatim}[frame=single]
+SUBDIRS = libltdl src
+\end{Verbatim}
+
+\item You must also arrange for the code of libltdl to be linked into your application. There are two ways to do this: as a regular Libtool library; or as a convenience library (see section Creating Convenience Libraries). Either way there are catches to be aware of, which will be addressed in a future release. Until libltdl is present on the average user's machine, I recommend building a convenience library. You can do that in `configure.in':
+
+\begin{Verbatim}[frame=single]
+AC_LIBLTDL_CONVENIENCE
+AC_PROG_LIBTOOL
+\end{Verbatim}
+
+The main thing to be aware of when you follow these steps, is that you can only have one copy of the code from libltdl in any application. Once you link the objects into a library, that library will not work with any other library which has also linked with libltdl, or any application which has its own copy of the objects. If you were to try, the libltdl symbol names would clash.
+
+The alternative is to substitute `AC\_{}LIBLTDL\_{}CONVENIENCE' with
+`AC\_{}LIBLTDL\_{}INSTALLABLE'. Unfortunately there are currently many potential problems with this approach. This macro will try to find an already installed libltdl and use that, or else the embedded libltdl will be built as a standard shared library, which must be installed along with any libraries or applications that use it. There is no testing for version compatibility, so it is possible that two or more applications that use this method will overwrite one anothers copies of the installed libraries and headers. Also, the code which searches for the already installed version of libltdl tends not to find the library on many hosts, due to the native libraries it depends on being difficult to predict.
+
+Both of the `AC\_{}LIBLTDL\_{}...' macros set the values of `INCLTDL' and `LIBLTDL' so that they can be used to add the correct include and library flags to the compiler in your Makefiles. They are not substituted by default. If you need to use them you must also add the following macros to your `configure.in': 
+
+\begin{Verbatim}[frame=single]
+AC_SUBST(INCLTDL)
+AC_SUBST(LIBLTDL)
+\end{Verbatim}
+
+\item Many of the libltdl supported hosts require that a separate shared library be linked into any application that uses dynamic runtime loading. libltdl is wrapped around this native implementation on these hosts, so it is important to link that library too. Adding support for module loading through the wrapped native implementation is independent of Libtools determination of how shared objects are compiled. On GNU/Linux, you would need to link your program with libltdl and `libdl', for example.
+
+Libtool installs a macro, `AC\_{}LIBTOOL\_{}DLOPEN', which adds tests to your `configure' that will search for this native library. Whenever you use libltdl you should add this macro to your `configure.in' before `AC\_{}PROG\_{}LIBTOOL':
+
+\begin{Verbatim}[frame=single]
+AC_LIBTOOL_DLOPEN
+AC_LIBLTDL_CONVENIENCE
+AC_PROG_LIBTOOL
+...
+AC_SUBST(INCLTDL)
+AC_SUBST(LIBLTDL)
+\end{Verbatim}
+
+`AC\_{}LIBTOOL\_{}DLOPEN' takes care to substitute a suitable value of `LIBADD\_{}DL' into your `Makefile.am', so that your code will compile correctly wherever the implementation library is discovered:
+
+\begin{Verbatim}[frame=single]
+INCLUDES        += @INCLTDL@
+
+bin_PROGRAMS     = your_app
+your_app_SOURCES = main.c support.c
+your_app_LDADD   = @LIBLTDL@ @LIBADD_DL@
+\end{Verbatim}
+
+\end{enumerate}
+
+Libtool 1.4 has much improved inter-library dependency tracking code which no longer requires `@LIBADD\_{}DL@' be explicitly referenced in your `Makefile.am'. When you install libltdl, Libtool 1.4 (or better) will make a note of any native library that libltdl depends on -- linking it automatically, provided that you link `libltdl.la' with libtool. You might want to omit the `@LIBADD\_{}DL@' from your `Makefile.am' in this case, if seeing the native library twice (once as a dependee of libltdl, and again as an expansion of `@LIBADD\_{}DL@') on the link line bothers you.
+
+Beyond this basic configury setup, you will also want to write some code to form a module loading subsystem for your project, and of course some modules! That process is described in Module Loader and Dynamic Module respectively. 
+
+\subsection{Memory Management}
+
+Internally, libltdl maintains a list of loaded modules and symbols on the heap. If you find that you want to use it with a project that has an unusual memory management API, or if you simply want to use a debugging `malloc', libltdl provides hook functions for you to set the memory routines it should call.
+
+The way to use these hooks is to point them at the memory allocation routines you want libltdl to use before calling any of its API functions:
+
+ 	
+\begin{Verbatim}[frame=single]
+    lt_dlmalloc = (lt_prt_t (*) PARAMS((size_t))) mymalloc;
+    lt_dlfree   = (void (*) PARAMS((lt_ptr_t))) myfree;
+\end{Verbatim}
+
+Notice that the function names need to be cast to the correct type before 
+assigning them to the hook symbols. You need to do this because the 
+prototypes of the functions you want libltdl to use will vary slightly from 
+libltdls own function pointer types-- libltdl uses lt\_{}ptr\_{}t for 
+compatibility with K\&R compilers, for example. 
+
+\subsection{Module Loader}
+
+This section contains a fairly minimal libltdl based dynamic module loader that you can use as a base for your own code. It implements the same API as the simple module loader in 17.4 A Simple GNU/Linux Module Loader, and because of the way libltdl is written is able to load modules written for that loader, too. The only part of this code which is arguably more complex than the equivalent from the previous example loader, is that lt\_{}dlinit and lt\_{}dlexit must be called in the appropriate places. In contrast, The module search path initialisation is much simplified thanks to another relative improvement in the libltdl API: 
+
+\begin{description}
+\item[Function: int lt\_{}dlsetsearchpath (const char *path)]
+\
+
+    This function takes a colon separated list of directories, which will be the first directories libltdl will search when trying to locate a dynamic module. 
+
+\end{description}
+Another new API function is used to actually load the module:
+
+\begin{description}
+\item[Function: lt\_{}dlhandle lt\_{}dlopenext (const char *filename)]
+\
+
+This function is used in precisely the same way as lt\_{}dlopen. However, if the search for the named module by exact match against filename fails, it will try again with a `.la' extension, and then the native shared library extension (`.sl' on HP-UX, for example). 
+\end{description}
+
+The advantage of using lt\_{}dlopenext to load dynamic modules is that it will work equally well when loading modules not compiled with Libtool. Also, by passing the module name parameter with no extension, this function allows module coders to manage without Libtool.
+
+\begin{Verbatim}[frame=single]
+#include <stdio.h>
+#include <stdlib.h>
+#ifndef EXIT_FAILURE
+#  define EXIT_FAILURE        1
+#  define EXIT_SUCCESS        0
+#endif
+
+#include <limits.h>
+#ifndef PATH_MAX
+#  define PATH_MAX 255
+#endif
+
+#include <string.h>
+#include <ltdl.h>
+
+#ifndef MODULE_PATH_ENV
+#  define MODULE_PATH_ENV        "MODULE_PATH"
+#endif
+
+typedef int entrypoint (const char *argument);
+
+/* Save and return a copy of the dlerror() error  message,
+   since the next API call may overwrite the original. */
+static char *dlerrordup (char *errormsg);
+
+int
+main (int argc, const char *argv[])
+{
+  char *errormsg = NULL;
+  lt_dlhandle module = NULL;
+  entrypoint *run = NULL;
+  int errors = 0;
+
+  if (argc != 3)
+    {
+      fprintf (stderr, "USAGE: main MODULENAME ARGUMENT\n");
+      exit (EXIT_FAILURE);
+    }
+
+  /* Initialise libltdl. */
+  errors = lt_dlinit ();
+
+  /* Set the module search path. */
+  if (!errors)
+    {
+      const char *path = getenv (MODULE_PATH_ENV);
+
+      if (path != NULL)
+        errors = lt_dlsetsearchpath (path);
+    }
+  
+  /* Load the module. */
+  if (!errors)
+    module = lt_dlopenext (argv[1]);
+
+  /* Find the entry point. */
+  if (module)
+    {
+      run = (entrypoint *) lt_dlsym (module, "run");
+
+      /* In principle, run might legitimately be NULL, so
+         I don't use run == NULL as an error indicator
+         in general. */
+      errormsg = dlerrordup (errormsg);
+      if (errormsg != NULL)
+        {
+          errors = lt_dlclose (module);
+          module = NULL;
+        }
+    }
+  else
+    errors = 1;
+
+  /* Call the entry point function. */
+  if (!errors)
+  {
+   int result = (*run) (argv[2]);
+   if (result < 0)
+    errormsg = strdup ("module entry point execution failed");
+   else
+    printf ("\t=> %d\n", result);
+  }
+
+  /* Unload the module, now that we are done with it. */
+  if (!errors)
+    errors = lt_dlclose (module);
+
+  if (errors)
+  {
+   /* Diagnose the encountered error. */
+   errormsg = dlerrordup (errormsg);
+
+   if (!errormsg)
+   {
+    fprintf (stderr, "%s: dlerror() failed.\n", argv[0]);
+    return EXIT_FAILURE;
+    }
+   }
+
+  /* Finished with ltdl now. */
+  if (!errors)
+    if (lt_dlexit () != 0)
+      errormsg = dlerrordup (errormsg);
+
+  if (errormsg)
+    {
+      fprintf (stderr, "%s: %s.\n", argv[0], errormsg);
+      free (errormsg);
+      exit (EXIT_FAILURE);
+    }
+
+  return EXIT_SUCCESS;
+}
+
+/* Be careful to save a copy of the error message,
+   since the  next API call may overwrite the original. */
+static char *
+dlerrordup (char *errormsg)
+{
+  char *error = (char *) lt_dlerror ();
+  if (error && !errormsg)
+    errormsg = strdup (error);
+  return errormsg;
+}
+\end{Verbatim}
+
+This file must be compiled with libtool, so that the dependent libraries (`libdl.so' on my GNU/Linux machine) are handled correctly, and so that the dlpreopen support is compiled in correctly (see section \ref{S_dlpreopen_Loading}
+dlpreopen Loading, page \pageref{S_dlpreopen_Loading}):
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=link gcc -g -o ltdl-loader -dlopen self \
+-rpath /tmp/lib ltdl-loader.c -lltdl
+gcc -g -o ltdl-loader -Wl,--rpath,/tmp/lib ltdl-loader.c \
+-lltdl -ldl
+\end{Verbatim}
+
+By using both of lt\_{}dlopenext and lt\_{}dlsetsearchpath, this module loader will make a valiant attempt at loading anything you pass to it -- including the module I wrote for the simple GNU/Linux module loader earlier (see section 17.5 A Simple GNU/Linux Dynamic Module). Here, you can see the new ltdl-loader loading and using the `simple-module' module from 17.5 A Simple GNU/Linux Dynamic Module:
+
+ 	
+\begin{Verbatim}[frame=single]
+$ ltdl-loader simple-module World
+Hello, World!
+        => 0
+\end{Verbatim}
+
+
+
+\subsection{Dependent Libraries}
+
+On modern Unices(42), the shared library architecture is smart enough to encode all of the other libraries that a dynamic module depends on as part of the format of the file which is that module. On these architectures, when you lt\_{}dlopen a module, if any shared libraries it depends on are not already loaded into the main application, the system runtime loader will ensure that they too are loaded so that all of the module's symbols are satisfied.
+
+Less well endowed systems(43), cannot do this by themselves. Since Libtool release 1.4, libltdl uses the record of inter-library dependencies in the libtool pseudo-library (see section 10. Introducing GNU Libtool) to manually load dependent libraries as part of the lt\_{}dlopen call.
+
+An example of the sort of difficulties that can arise from trying to load a module that has a complex library dependency chain is typified by a problem I encountered with GNU Guile a few years ago: Earlier releases of the libXt Athena widget wrapper library for GNU Guile failed to load on my a.out based GNU/Linux system. When I tried to load the module into a running Guile interpreter, it couldn't resolve any of the symbols that referred to libXt. I soon discovered that the libraries that the module depended upon were not loaded by virtue of loading the module itself. I needed to build the interpreter itself with libXt and rely on back-linking to resolve the `Xt' references when I loaded the module. This pretty much defeated the whole point of having the wrapper library as a module. Had Libtool been around in those days, it would have been able to load libXt as part of the process of loading the module.
+
+If you program with the X window system, you will know that the list of libraries you need to link into your applications soon grows to be very large. Worse, if you want to load an X extension module into a non-X aware application, you will encounter the problems I found with Guile, unless you link your module with libtool and dynamically load it with libltdl. At the moment, the various X Window libraries are not built with libtool, so you must be sure to list all of the dependencies when you link a module. By doing this, Libtool can use the list to check that all of the libraries required by a module are loaded correctly as part of the call to lt\_{}dlopen, like this: 
+
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=link gcc -o module.so -module -avoid-version\
+source.c -L/usr/X11R6/lib -lXt -lX11
+...
+$ file .libs/module.so
+.libs/module.so: ELF 32-bit LSB shared object, Intel 80386,
+version 1, not stripped
+$ ldd .libs/module.so
+        libX11.so.6 => /usr/X11R6/lib/libX11.so.6 (0x4012f00)
+        libXt.so.6 => /usr/X11R6/lib/libXt.so.6 (0x4014500)
+\end{Verbatim}
+
+Or, if you are using Automake:
+
+\begin{Verbatim}[frame=single]
+...
+lib_LTLIBRARIES   = module.la
+module_la_SOURCES = source.c
+module_la_LDFLAGS = -module -avoid-version -L$(X11LIBDIR)
+module_la_LIBADD  = -lXt -lX11
+...
+\end{Verbatim}
+
+It is especially important to be aware of this if you develop on a modern platform which correctly handles these dependencies natively (as in the example above), since the code may still work on your machine even if you don't correctly note all of the dependencies. It will only break if someone tries to use it on a machine that needs Libtool's help for it to work, thus reducing the portability of your project.
+
+\subsection{Dynamic Module}
+
+Writing a module for use with the libltdl based dynamic module loader is no more involved than before: It must provide the correct entry points, as expected by the simple API I designed -- the `run' entry point described in 17.4 A Simple GNU/Linux Module Loader. Here is such a module, `ltdl-module.c': 
+
+\begin{Verbatim}[frame=single]
+#include <stdio.h>
+#include <math.h>
+
+#define run ltdl_module_LTX_run
+
+int
+run (const char *argument)
+{
+  char *end = NULL;
+  long number;
+  
+  if (!argument || *argument == '\0')
+    {
+      fprintf (stderr, "error: invalid argument, \"%s\".\n",
+               argument ? argument : "(null)");
+      return -1;
+    }
+  
+  number = strtol (argument, &end, 0);
+  if (end && *end != '\0')
+    {
+      fprintf (stderr, "warning: trailing garbage \"%s\".\n",
+               end);
+    }
+
+  printf("Square root of %s is %f\n",argument,sqrt(number));
+
+  return 0;
+}
+\end{Verbatim}
+
+To take full advantage of the new module loader, the module itself must be compiled with Libtool. Otherwise dependent libraries will not have been stored when libltdl tries to load the module on an architecture that doesn't load them natively, or which doesn't have shared libraries at all (see section 18.4 dlpreopen Loading).
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=compile gcc -c ltdl-module.c
+rm -f .libs/ltdl-module.lo
+gcc -c ltdl-module.c  -fPIC -DPIC -o .libs/ltdl-module.lo
+gcc -c ltdl-module.c -o ltdl-module.o >/dev/null 2>&1
+mv -f .libs/ltdl-module.lo ltdl-module.lo
+$ libtool --mode=link gcc -g -o ltdl-module.la -rpath `pwd` \
+-no-undefined -module -avoid-version ltdl-module.lo -lm
+rm -fr .libs/ltdl-module.la .libs/ltdl-module.* \
+.libs/ltdl-module.*
+gcc -shared  ltdl-module.lo  -lm -lc  -Wl,-soname \
+-Wl,ltdl-module.so -o .libs/ltdl-module.so
+ar cru .libs/ltdl-module.a  ltdl-module.o
+creating ltdl-module.la
+(cd .libs && rm -f ltdl-module.la && ln -s ../ltdl-module.la \
+ltdl-module.la)
+\end{Verbatim}
+
+You can see from the interaction below that `ltdl-loader' does not load the math library, `libm', and that the shared part of the Libtool module, `ltdl-module', does have a reference to it. The pseudo-library also has a note of the `libm' dependency so that libltdl will be able to load it even on architectures that can't do it natively:
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=execute ldd ltdl-loader
+        libltdl.so.0 => /usr/lib/libltdl.so.0 (0x4001a000)
+        libdl.so.2 => /lib/libdl.so.2 (0x4001f000)
+        libc.so.6 => /lib/libc.so.6 (0x40023000)
+        /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
+$ ldd .libs/ltdl-module.so
+        libm.so.6 => /lib/libm.so.6 (0x40008000)
+        libc.so.6 => /lib/libc.so.6 (0x40025000)
+        /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x80000000)
+$ fgrep depend ltdl-module.la
+# Libraries that this one depends upon.
+dependency_libs=' -lm'
+\end{Verbatim}
+
+This module is now ready to load from `ltdl-loader':
+
+\begin{Verbatim}[frame=single]
+$ ltdl-loader ltdl-module 9
+Square root of 9 is 3.000000
+        => 0
+\end{Verbatim}
+
+\section{Portable Library Design}
+
+When partitioning the functionality of your project into libraries, and particularly loadable modules, it easy to inadvertantly rely on modern shared library features such as back-linking or dependent library loading. If you do accidentally use any of these features, you probably won't find out about it until someone first tries to use your project on an older or less featureful host.
+
+I have already used the `-module' and `-avoid-version' libtool linking options when compiling the libltdl module in the last section, the others are useful to know also. All of these are used with the `link' mode of libtool (`libtool --mode=link'): 
+
+
+\begin{description}
+\item[`-module']
+\
+
+    This option tells libtool that the target is a dynamically loadable module (as opposed to a conventional shared library) and as such need not have the `lib' prefix.
+
+\item[`-avoid-version']
+\
+
+    When linking a dynamic module, this option can be used instead of the `-version-info' option, so that the module is not subject to the usual shared library version number suffixes.
+
+\item[`-no-undefined']
+\
+
+    This is an extremely important option when you are aiming for maximum portability. It declares that all of the symbols required by the target are resolved at link time. Some shared library architectures do not allow undefined symbols by default (Tru64 Unix), and others do not allow them at all (AIX). By using this switch, and ensuring that all symbols really are resolved at link time, your libraries will work on even these platforms. See section 11.2.1 Creating Libtool Libraries with Automake.
+
+\item[`-export-dynamic']
+\
+
+    Almost the opposite of `-no-undefined', this option will compile the target so that the symbols it exports can be used to satisfy unresolved symbols in subsequently loaded modules. Not all shared library architectures support this feature, and many that do support it, do so by default regardless of whether this option is supplied. If you rely on this feature, then you should use this option, in the knowledge that you project will not work correctly on architectures that have no support for the feature. For maximum portability, you should neither rely on this feature nor use the `-export-dynamic' option -- but, on the occasions you do need the feature, this option is necessary to ensure that the linker is called correctly. 
+\end{description}
+
+When you have the option to do so, I recommend that you design your project so that each of the libraries and modules is self contained, except for minimal number of dependent libraries, arranged in a directional graph shaped like a tree. That is, by relying on back-linking, or mutual or cyclic dependencies you reduce the portability of your project. In the diagrams below, an arrow indicates that the compilation object relies on symbols from the objects that it points to:
+
+\begin{Verbatim}[frame=single]
+       main            .---> main                main
+         |             |       |                   |
+    .----+----,        |  .----+----,         .----+----,
+    v         v        |  v         v         v         v
+   liba      libb      liba        libb      liba<-----libb
+    |                     |                   |         ^
+    v                     v                   v         |
+   libc                  libc                libc-------'
+
+     Tree: good        Backlinking: bad       Cyclic: bad
+\end{Verbatim}
+
+\section{dlpreopen Loading}\label{S_dlpreopen_Loading}
+
+On machines which do not have any facility for shared libraries or dynamic modules, libltdl allows an application to lt\_{}dlopen modules, provided that the modules are known at link time. This works by linking the code for the modules into the application in advance, and then looking up the addresses of the already loaded symbols when lt\_{}dlsym is called. We call this mechanism dlpreopening -- so named because the modules must be loaded at link time, not because the API to use modules loaded in this way is any different.
+
+This feature is extremely useful for debugging, allowing you to make a fully statically linked application from the executable and module objects, without changing any source code to work around the module loading calls. As far as the code outside the libltdl API can tell, these modules really are being loaded dynamically. Driving a symbolic debugger across module boundaries is however much easier when blocks of code aren't moving in and out of memory during execution.
+
+You may have wondered about the purpose of the following line in the dynamic module code in Dependent Libraries: 
+
+\begin{Verbatim}[frame=single]
+#define run ltdl_module_LTX_run
+\end{Verbatim}
+
+The reason for redefining the entry point symbol in this way is to prevent a symbol clash when two or more modules that provide identically named entry point functions are preloaded into an executable. It would be otherwise impossible to preload both `simple-module.c' and `ltdl-module.c', for example, since each defines the symbol `run'. To allow us to write dynamic modules that are potentially preloaded, lt\_{}dlsym will first try to lookup the address of a named symbol with a prefix consisting of the canonicalized name of the module being searched, followed by the characters `\_{}LTX\_{}'. The module name part of this prefix is canonicalized by replacing all non-alphanumeric characters with an underscore. If that fails, lt\_{}dlsym resorts to the unadorned symbol name, which is how `run' was found in `simple-module.la' by `ltdl-loader' earlier.
+
+Supporting this feature in your module loading code is a simple matter of initialising the address lookup table, and `ltdl.h' defines a convenient macro to do exactly that: 
+
+\begin{description}
+\item[Macro: LTDL\_{}SET\_{}PRELOADED\_{}SYMBOLS ()]
+    Add this macro to the code of your module loading code, before the first call to a libltdl function, to ensure that the dlopen address lookup table is populated. 
+\end{description}
+
+Now change the contents of `ltdl-loader.c', and add a call to this macro, so that it looks like this: 
+
+\begin{Verbatim}[frame=single]
+  /* Initialise preloaded symbol lookup table. */
+  LTDL_SET_PRELOADED_SYMBOLS();
+
+  /* Initialise libltdl. */
+  errors = lt_dlinit ();
+\end{Verbatim}
+
+Libtool will now be able to fall back to using preloaded static modules if you tell it to, or if the host platform doesn't support native dynamic loading.
+
+\begin{quote}
+If you use `LTDL\_{}SET\_{}PRELOADED\_{}SYMBOLS' in your module loader, you must also specify something to preload to avoid compilation failure due to undefined `lt\_{}preloaded\_{}symbols'. You can name modules on the Libtool link command line using one of `-dlopen' or `-dlpreopen'. This includes support for accessing the symbols of the main executable opened with `lt\_{}dlopen(NULL)'---you can ask Libtool to fall back to preopening the main modules like this:
+\end{quote}
+
+\begin{Verbatim}[frame=single]
+$ libtool gcc -g -o ltdl-loader -dlopen self -rpath /tmp/lib \
+ltdl-loader.c -lltdl
+rm -f .libs/ltdl-loader.nm .libs/ltdl-loader.nmS \
+.libs/ltdl-loader.nmT
+creating .libs/ltdl-loaderS.c
+(cd .libs && gcc -c -fno-builtin -fno-rtti -fno-exceptions
+"ltdl-loaderS.c")
+rm -f .libs/ltdl-loaderS.c .libs/ltdl-loader.nm \
+.libs/ltdl-loader.nmS .libs/ltdl-loader.nmT
+gcc -o ltdl-loader .libs/ltdl-loaderS.o ltdl-loader.c
+-Wl,--export-dynamic  /usr/lib/libltdl.so -ldl \
+-Wl,--rpath -Wl,/tmp/lib
+rm -f .libs/ltdl-loaderS.o
+\end{Verbatim}
+
+\begin{quote}
+It doesn't make sense to add preloaded module support to a project, when you have no modules to preopen, so the compilation failure in that case is actually a feature of sorts.
+\end{quote}
+
+The `LTDL\_{}SET\_{}PRELOADED\_{}SYMBOLS' macro does not interfere with the normal operation of the code when modules are dynamically loaded, provided you use the `-dlopen' option on the link line. The advantage of referencing the macro by default is that you can recompile the application with or without preloaded module, and all without editing the sources.
+
+If you have no modules to link in by default, you can force Libtool to populate the preload symbol table by using the `-dlopen force' option. This is the option used to preload the symbols of the main executable so that you can subsequently call `lt\_{}dlopen(NULL)'.
+
+Multiple modules can be preloaded, although at the time of writing only Libtool compiled modules can be used. If there is a demand, Libtool will be extended to include native library preloading in a future revision.
+
+To illustrate, I have recompiled the `simple-module.c' module with libtool: 
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=compile gcc -c simple-module.c
+rm -f .libs/simple-module.lo
+gcc -c simple-module.c  -fPIC -DPIC -o .libs/simple-module.lo
+gcc -c simple-module.c -o simple-module.o >/dev/null 2>&1
+mv -f .libs/simple-module.lo simple-module.lo
+$ libtool --mode=link gcc -g -o simple-module.la -rpath `pwd`
+-no-undefined -module -avoid-version simple-module.lo
+rm -fr .libs/simple-module.la .libs/simple-module.*
+.libs/simple-module.*
+gcc -shared  simple-module.lo  -lc  -Wl,-soname \
+-Wl,simple-module.so -o .libs/simple-module.so
+ar cru .libs/simple-module.a  simple-module.o
+creating simple-module.la
+(cd .libs && rm -f simple-module.la && ln -s \
+../simple-module.la simple-module.la)
+\end{Verbatim}
+
+The names of the modules that may be subsequently lt\_{}dlopened are added to the application link line. I am using the `-static' option to force a static only link, which must use dlpreopened modules by definition. I am only specifying this because my host has native dynamic loading, and Libtool will use that unless I force a static only link, like this:
+
+\begin{Verbatim}[frame=single]
+$ libtool --mode=link gcc -static -g -o ltdl-loader \
+ltdl-loader.c -lltdl -dlopen ltdl-module.la -dlopen \
+simple-module.la rm -f .libs/ltdl-loader.nm \
+.libs/ltdl-loader.nmS .libs/ltdl-loader.nmT
+creating .libs/ltdl-loaderS.c
+extracting global C symbols from ./.libs/ltdl-module.a
+extracting global C symbols from ./.libs/simple-module.a
+(cd .libs && gcc -c -fno-builtin -fno-rtti -fno-exceptions \
+"ltdl-loaderS.c")
+rm -f .libs/ltdl-loaderS.c .libs/ltdl-loader.nm \
+.libs/ltdl-loader.nmS .libs/ltdl-loader.nmT
+gcc -g -o ltdl-loader ltdl-loader.c .libs/ltdl-loaderS.o \
+./.libs/ltdl-module.a -lm ./.libs/simple-module.a \
+/usr/lib/libltdl.a -ldl
+rm -f .libs/ltdl-loaderS.o
+$ ./ltdl-loader ltdl-module 345
+Square root of 345 is 18.574176
+        => 0
+$ ./ltdl-loader simple-module World
+Hello, World!
+        => 0
+\end{Verbatim}
+
+Note that the current release of Libtool requires that the pseudo-library be present for any libltdl loaded module, even preloaded ones. Once again, if there is sufficient demand, this may be fixed in a future release. Until then, if the pseudo-library was deleted or cannot be found, this will happen:
+
+\begin{Verbatim}[frame=single]
+$ rm -f simple-module.la
+$ ./ltdl-loader simple-module World
+./ltdl-loader: file not found.
+\end{Verbatim}
+
+A side effect of using the `LTDL\_{}SET\_{}PRELOADED\_{}SYMBOLS' macro is that if you subsequently link the application without Libtool, you will get an undefined symbol for the Libtool supplied `lt\_{}preloaded\_{}symbols'. If you need to link in this fashion, you will need to provide a stub that supplies the missing definition. Conversely, you must be careful not to link the stub file when you do link with Libtool, because it will clash with the Libtool generated table it is supposed to replace:
+
+\begin{Verbatim}[frame=single]
+#include <ltdl.h>
+const lt_dlsymlist lt_preloaded_symbols[] = { { 0, 0 } };
+\end{Verbatim}
+
+Of course, if you use this stub, and link the application without the benefits of Libtool, you will not be able to use any preloaded modules -- even if you statically link them, since there is no preloaded symbol lookup table in this case.
+
+\section{User Module Loaders}
+
+While writing the module loading code for GNU M4 1.5, I found that libltdl did not provide a way for loading modules in exactly the way I required: As good as the preloading feature of libltdl may be, and as useful as it is for simplifying debugging, it doesn't have all the functionality of full dynamic module loading when the host platform is limited to static linking. After all, you can only ever load modules that were specified at link time, so for access to user supplied modules the whole application must be relinked to preload these new modules before lt\_{}dlopen will be able to make use of the additional module code.
+
+In this situation, it would be useful to be able to automate this process. That is, if a libltdl using process is unable to lt\_{}dlopen a module in any other fashion, but can find a suitable static archive in the module search path, it should relink itself along with the static archive (using libtool to preload the module), and then exec the new executable. Assuming all of this is successful, the attempt to lt\_{}dlopen can be tried again -- if the `suitable' static archive was chosen correctly it should now be possible to access the preloaded code. 
+
+\subsection{Loader Mechanism}
+
+Since Libtool 1.4, libltdl has provided a generalized method for loading modules, which can be extended by the user. libltdl has a default built in list of module loading mechanisms, some of which are peculiar to a given platform, others of which are more general. When the `libltdl' subdirectory of a project is configured, the list is narrowed to include only those mechanisms, or simply loaders, which can work on the host architecture. When `lt\_{}dlopen' is called, the loaders in this list are tried, in order, until the named module has loaded, or all of the loaders in the list have been exhausted. The entries in the final list of loaders each have a unique name, although there may be several candidate loaders for a single name before the list is narrowed. For example, the `dlopen' loader is implemented differently on BeOS and Solaris -- for a single host, there can be only one implementation of any named loader. The name of a module loader is something entirely different to the name of a loaded module, something that should become clearer as you read on.
+
+In addition to the loaders supplied with libltdl, your project can add more loaders of its own. New loaders can be added to the end of the existing list, or immediately before any other particular loader, thus giving you complete control of the relative priorities of all of the active loaders in your project.
+
+In your module loading API, you might even support the dynamic loading of user supplied loaders: that is your users would be able to create dynamic modules which added more loading mechanisms to the existing list of loaders!
+
+Version 1.4 of Libtool has a default list that potentially contains an implementation of the following loaders (assuming all are supported by the host platform): 
+
+
+\begin{description}
+\item[dlpreopen]
+\
+
+    If the named module was preloaded, use the preloaded symbol table for subsequent lt\_{}dlsym calls.
+
+\item[dlopen]
+\
+
+    If the host machine has a native dynamic loader API use that to try and load the module.
+
+\item[dld]
+\
+
+    If the host machine has GNU dld(44), use that to try and load the module.
+\end{description}
+
+Note that loader names with a `dl' prefix are reserved for future use by Libtool, so you should choose something else for your own module names to prevent a name clash with future Libtool releases.
+
+\subsection{Loader Management}
+
+The API supplies all of the functions you need to implement your own module loading mechanisms to solve problems just like this:
+
+\begin{description}
+\item[Function: lt\_{}dlloader\_{}t * lt\_{}dlloader\_{}find (const char *loader\_{}name)]
+\
+
+    Each of the module loaders implemented by libltdl is stored according to a unique name, which can be used to lookup the associated handle. These handles operate in much the same way as lt\_{}dlhandles: They are used for passing references to modules in and out of the API, except that they represent a kind of module loading method, as opposed to a loaded module instance.
+
+    This function finds the `lt\_{}dlloader\_{}t' handle associated with the unique name passed as the only argument, or else returns `NULL' if there is no such module loader registered. 
+
+\item[Function: int lt\_{}dlloader\_{}add (lt\_{}dlloader\_{}t *place,]
+\item[lt\_{}user\_{}dlloader *dlloader, const char *loader\_{}name)]
+\
+
+    This function is used to register your own module loading mechanisms with libltdl. If place is given it must be a handle for an already registered module loader, which the new loader dlloader will be placed in front of for the purposes of which order to try loaders in. If place is `NULL', on the other hand, the new dlloader will be added to the end of the list of loaders to try when loading a module instance. In either case loader\_{}name must be a unique name for use with lt\_{}dlloader\_{}find.
+
+    The dlloader argument must be a C structure of the following format, populated with suitable function pointers which determine the functionality of your module loader: 
+
+\begin{Verbatim}[frame=single]
+struct lt_user_dlloader {
+  const char         *sym_prefix;
+  lt_module_open_t   *module_open;
+  lt_module_close_t  *module_close;
+  lt_find_sym_t      *find_sym;
+  lt_dlloader_exit_t *dlloader_exit;
+  lt_dlloader_data_t dlloader_data;
+};
+\end{Verbatim}
+
+\item[Function: int lt\_{}dlloader\_{}remove (const char *loader\_{}name)]
+\
+
+    When there are no more loaded modules that were opened by the given module loader, the loader itself can be removed using this function.
+\end{description}
+
+When you come to set the fields in the lt\_{}user\_{}dlloader structure, they must each be of the correct type, as described below:
+
+\begin{description}
+\item[Type: const char * sym\_{}prefix]
+\
+
+If a particular module loader relies on a prefix to each symbol being looked 
+up (for example, the Windows module loader necessarily adds a `\_{}' prefix 
+to each symbol name pased to lt\_{}dlsym), it should be recorded in 
+the `sym\_{}prefix' field. 
+
+\item[Type: lt\_{}module\_{}t lt\_{}module\_{}open\_{}t]
+\item[(lt\_{}dlloader\_{}data\_{}t loader\_{}data,const char *module\_{}name)]
+\
+
+    When lt\_{}dlopen has reached your registered module loader when attempting to load a dynamic module, this is the type of the module\_{}open function that will be called. The name of the module that libltdl is attempting to load, along with the module loader instance data associated with the loader being used currently, are passed as arguments to such a function call.
+
+    The lt\_{}module\_{}t returned by functions of this type can be anything at all that can be recognised as unique to a successfully loaded module instance when passed back into the module\_{}close or find\_{}sym functions in the lt\_{}user\_{}dlloader module loader structure. 
+
+\item[Type: int lt\_{}module\_{}close\_{}t (lt\_{}dlloader\_{}data\_{}t loader\_{}data, lt\_{}module\_{}t module)]
+\
+
+    In a similar vein, a function of this type will be called by lt\_{}dlclose, where module is the returned value from the `module\_{}open' function which loaded this dynamic module instance. 
+
+\item[Type: lt\_{}ptr\_{}t lt\_{}find\_{}sym\_{}t (lt\_{}dlloader\_{}data\_{}t loader\_{}data,]
+\item[lt\_{}module\_{}t module, const char *symbol\_{}name)]
+\
+
+    In a similar vein once more, a function of this type will be called by lt\_{}dlsym, and must return the address of symbol\_{}name in module. 
+
+\item[Type: int lt\_{}dlloader\_{}exit\_{}t (lt\_{}dlloader\_{}data\_{}t loader\_{}data)]
+\
+
+    When a user module loader is lt\_{}dlloader\_{}removed, a function of this type will be called. That function is responsible for releasing any resouces that were allocated during the initialisation of the loader, so that they are not `leaked' when the lt\_{}user\_{}dlloader structure is recycled.
+
+    Note that there is no initialisation function type: the initialisation of a user module loader should be performed before the loader is registered with lt\_{}dlloader\_{}add. 
+
+\item[Type: lt\_{}dlloader\_{}data\_{}t dlloader\_{}data]
+\
+
+    The dlloader\_{}data is a spare field which can be used to store or pass any data specific to a particular module loader. That data will always be passed as the value of the first argument to each of the implementation functions above. 
+\end{description}
+
+\subsection{Loader Errors}
+
+When writing the code to fill out each of the functions needed to populate the lt\_{}user\_{}dlloader structure, you will often need to raise an error of some sort. The set of standard errors which might be raised by the internal module loaders are available for use in your own loaders, and should be used where possible for the sake of uniformity if nothing else. On the odd occasion where that is not possible, libltdl has API calls to register and set your own error messages, so that users of your module loader will be able to call lt\_{}dlerror and have the error message you set returned:
+
+\begin{description}
+\item[Function: int lt\_{}dlseterror (int errorcode)]
+\
+
+    By calling this function with one of the error codes enumerated in the header file, `ltdl.h', lt\_{}dlerror will return the associated diagnostic until the error code is changed again. 
+
+\item[Function: int lt\_{}dladderror (const char *diagnostic)]
+\
+
+    Often you will find that the existing error diagnostics do not describe the failure you have encountered. By using this function you can register a more suitable diagnostic with libltdl, and subsequently use the returned integer as an argument to lt\_{}dlseterror. 
+\end{description}
+
+libltdl provides several other functions which you may find useful when writing a custom module loader. These are covered in the Libtool manual, along with more detailed descriptions of the functions described in the preceding paragraphs.
+
+In the next chapter, we will discuss the more complex features of Automake, before moving on to show you how to use those features and add libltdl module loading to the Sic project from 12. A Large GNU Autotools Project in the chapter after that. 
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
+
+%\begin{Verbatim}[frame=single]
+%\end{Verbatim}
